@@ -106,6 +106,41 @@ FIN<-na.omit(FIN)
 
 
 <<>>=
+#-------------------------------------------search other variables-----------------------------------
+library(WDI)
+WDIsearch(string = "cost", short = TRUE, cache = NULL)
+
+data_WDI4<-WDI(country = "all", indicator = c("TRD.ACRS.BRDR.IMP.COST.CD.DB0615.DFRN","TRD.ACRS.BRDR.IMP.COST.CD.DB0615","TRD.ACRS.BRDR.EXPT.COST.CD.DB0615.DFRN","TRD.ACRS.BRDR.EXPT.COST.CD.DB0615"), start=2003, end=2015)
+
+data_WDI4 <- data_WDI4[data_WDI4$iso2c %in% x, ]
+
+#282&145, 3, 6
+
+trade<-readxl::read_xlsx("./data/chinatradecosts.xlsx")
+trade<-filter(trade, sector=="GTT")
+
+
+#-------------------------------------trade---------------------------------
+WDIsearch(string = "trade", short = TRUE, cache = NULL)
+
+data_WDI5<-WDI(country = "all", indicator = c("BG.GSR.NFSV.GD.ZS","CM.MKT.TRAD.CD"), start=2003, end=2015)
+
+data_WDI5 <- data_WDI4[data_WDI4$iso2c %in% x, ]
+@
+
+<<>>=
+library(WDI)
+#-------------------------------------repatriatoin---------------------------------
+WDIsearch(string = "remittance", short = TRUE, cache = NULL)
+
+data_WDI5<-WDI(country = "all", indicator = c("SI.RMT.COST.OB.ZS","SI.RMT.COST.IB.ZS"), start=2003, end=2015)
+
+data_WDI5 <- data_WDI4[data_WDI4$iso2c %in% x, ]
+@
+
+
+
+<<>>=
 #---------------------------------------------test of FDI data------------------------------------------
 africa<-POL$Country
 data1<- data1[data1$country %in% africa, ]
