@@ -1,7 +1,6 @@
 \documentclass{article}
 
 \begin{document}
-sdsdsdsdsd
 <<>>=
 library(WDI)
 library(tidyr)
