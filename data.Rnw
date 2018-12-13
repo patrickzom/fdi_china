@@ -1,7 +1,6 @@
 \documentclass{article}
 
 \begin{document}
-testtestetstes
 
 <<>>=
 library(WDI)
