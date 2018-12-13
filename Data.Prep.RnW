@@ -13,6 +13,7 @@ library(spdep)
 library(GISTools)
 @
 
+TEST if GitHub Desktop works
 
 <<>>=
 #Working dirctory
