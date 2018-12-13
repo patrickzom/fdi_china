@@ -162,9 +162,9 @@ data<-data[order(data$Year),]
 africa<-me$Country
 x<-shp@data
 x<-as.character(x$CNTR_ID)
-
 @
 
+TESTTESTTEST
 
 <<>>=
 # get the variables gdp per capita and population 
