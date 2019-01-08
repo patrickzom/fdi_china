@@ -16,3 +16,9 @@
 #                                               3: click commit
 #                                               4: comment the commit
 #                                               5: click on push(right top corner in the commit window)
+#                                               
+#                                               6: everytime you start working on the project click on the git bar and push
+#                                               so you will get the most up-to-date version of the project
+#                                               
+#                                               alternative: in the r-window where you find the environment you will also find 
+#                                               a git tab, you can also use this
