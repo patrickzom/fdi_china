@@ -1,0 +1,179 @@
+\documentclass{article}
+
+\begin{document}
+\SweaveOpts{concordance=TRUE}
+
+<<>>=
+library(WDI)
+library(tidyr)
+library(dplyr)
+library(readxl)
+library(rgdal)
+library(spdep)
+library(GISTools)
+@
+
+TEST if GitHub Desktop works
+
+<<>>=
+#Working dirctory
+setwd("C:/WU/Master/Spatial/Projekt") #Matthias Lokation
+setwd("C:/Users/melan/Documents/0686 Spatial Economics/Projekt") #Melanie Location
+getwd()
+@
+
+
+<<>>=
+#Loading the FDI Data
+data2<-readxl::read_xlsx("./data/FDI_China_Outflows_africa_2015_unctad.xlsx", sheet = 2)
+data<-gather(data2,"country", "value",2:57)
+
+africa<-colnames(data2[,-1])
+@
+
+
+<<>>=
+#Loading the Shapefile
+shp <- readOGR(dsn = "./data/Eurostat_RG_2016_4326_M01", layer ="CNTR_RG_01M_2016_4326", encoding = "UTF-8")
+@
+
+
+<<>>=
+#---------------------------------data manipulation
+#data2[data2==0]<-NA
+
+#data[data==0]<-NA
+data1<-data %>%spread(Year, value)
+
+data1<-na.omit(data1)
+africa<-data1$country
+
+africa
+
+#----------------------------------filter african countries
+shp <- shp[shp$NAME_ENGL %in% africa, ]
+@
+
+
+<<>>=
+#Loading the political data
+library(readxl)
+library(data.table)
+
+full_excel_read<-function(fpath,v=TRUE, skip=FALSE){
+
+  sheetnames <- excel_sheets(fpath)
+  workbook <- sapply(sheetnames,function (x){readxl::read_excel(fpath,sheet = x, skip = skip)})
+}
+
+
+pol<-full_excel_read("./data/3BResearchersDataset2018.xls", v=FALSE, skip = 6)
+pol<-pol[c(2:13)]
+
+POL <- rbindlist(pol, idcol = TRUE)
+
+POL$Country<-gsub("Cote d'Ivoire", "CÃ´te Dâ€™Ivoire", POL$Country)
+POL$Country<-gsub("Tanzania", "United Republic of Tanzania", POL$Country)
+POL$Country<-gsub("Congo, DR", "Democratic Republic of The Congo", POL$Country)
+POL <- POL[POL$Country %in% africa, ]
+POL<-POL[,-(3:21)]
+
+anyNA(POL)
+
+POL<-na.omit(POL)
+
+me<-POL%>%group_by(Country)%>%summarise(sum03 = sum(`2003`), sum04 = sum(`2004`),sum05 = sum(`2005`), sum06 = sum(`2006`),sum07 = sum(`2007`), sum08 = sum(`2008`),sum09 = sum(`2009`), sum10 = sum(`2010`),sum11 = sum(`2011`), sum12 = sum(`2012`), sum13 = sum(`2013`), sum14 = sum(`2014`), sum15 = sum(`2015`))
+@
+
+
+<<>>=
+#Loading the financial risk data
+
+fin<-full_excel_read("./data/4BDataset2018.xls", v=FALSE, skip = 6)
+fin<-fin[c(2:6)]
+
+FIN <- rbindlist(fin, idcol = TRUE)
+
+FIN$Country<-gsub("Cote d'Ivoire", "CÃ´te Dâ€™Ivoire", FIN$Country)
+FIN$Country<-gsub("Tanzania", "United Republic of Tanzania", FIN$Country)
+FIN$Country<-gsub("Congo, DR", "Democratic Republic of The Congo", FIN$Country)
+FIN <- FIN[FIN$Country %in% africa, ]
+FIN<-FIN[,-(3:21)]
+
+anyNA(FIN)
+
+FIN<-na.omit(FIN)
+@
+
+
+<<>>=
+#-------------------------------------------search other variables-----------------------------------
+library(WDI)
+WDIsearch(string = "cost", short = TRUE, cache = NULL)
+
+data_WDI4<-WDI(country = "all", indicator = c("TRD.ACRS.BRDR.IMP.COST.CD.DB0615.DFRN","TRD.ACRS.BRDR.IMP.COST.CD.DB0615","TRD.ACRS.BRDR.EXPT.COST.CD.DB0615.DFRN","TRD.ACRS.BRDR.EXPT.COST.CD.DB0615"), start=2003, end=2015)
+
+data_WDI4 <- data_WDI4[data_WDI4$iso2c %in% x, ]
+
+#282&145, 3, 6
+
+trade<-readxl::read_xlsx("./data/chinatradecosts.xlsx")
+trade<-filter(trade, sector=="GTT")
+
+
+#-------------------------------------trade---------------------------------
+WDIsearch(string = "trade", short = TRUE, cache = NULL)
+
+data_WDI5<-WDI(country = "all", indicator = c("BG.GSR.NFSV.GD.ZS","CM.MKT.TRAD.CD"), start=2003, end=2015)
+
+data_WDI5 <- data_WDI4[data_WDI4$iso2c %in% x, ]
+@
+
+<<>>=
+library(WDI)
+#-------------------------------------repatriatoin---------------------------------
+WDIsearch(string = "remittance", short = TRUE, cache = NULL)
+
+data_WDI5<-WDI(country = "all", indicator = c("SI.RMT.COST.OB.ZS","SI.RMT.COST.IB.ZS"), start=2003, end=2015)
+
+data_WDI5 <- data_WDI4[data_WDI4$iso2c %in% x, ]
+@
+
+
+
+<<>>=
+#---------------------------------------------test of FDI data------------------------------------------
+africa<-POL$Country
+data1<- data1[data1$country %in% africa, ]
+data1[data1==0]<-NA
+
+zeros<-apply(data1, 1, function(x) sum(is.na(x)))
+zero<-rowSums(is.na(data1))
+
+
+data2[data2==0]<-NA
+zero<-colSums(is.na(data2))
+zero<-as.data.frame(zero)
+@
+
+
+<<>>=
+# create vector with country IDs for the WDI filter
+data<-data[order(data$Year),]
+africa<-me$Country
+x<-shp@data
+x<-as.character(x$CNTR_ID)
+@
+
+TESTTESTTEST
+
+<<>>=
+# get the variables gdp per capita and population 
+data_WDI<-WDI(country = "all", indicator = c("SP.POP.TOTL","NY.GDP.PCAP.PP.KD"), start=2003, end=2015)# search population postition 497 #search gdp per capita postition 9 
+data_WDI <- data_WDI[data_WDI$iso2c %in% x, ]
+anyNA(data_WDI)
+
+@
+
+
+\end{document}
