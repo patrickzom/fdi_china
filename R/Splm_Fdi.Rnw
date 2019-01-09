@@ -1,0 +1,124 @@
+\documentclass{article}
+
+\begin{document}
+
+https://drive.google.com/file/d/1Oe__q_SkjiQkz33lqwD4gSUQ74B5GO_T/view
+<<>>=
+library(WDI)
+library(tidyr)
+library(dplyr)
+library(readxl)
+library(rgdal)
+library(spdep)
+library(GISTools)
+library(countrycode)
+library(data.table)
+library(mice)
+library(splm)
+library(plm)
+
+ihs <- function(x) {
+    y <- log(x + sqrt(x ^ 2 + 1))
+    return(y)
+}# alternative Box cox transform
+
+
+
+
+getwd()
+setwd("..")
+
+
+data_exp<-readRDS("./data/FDI_data.rds")
+W.list.inv<-readRDS("./data/W.list.inv.rds")
+W.dis<-readRDS("./data/W.dis.rds")
+
+#-----------------------------------------------------Testing
+
+summary(data_exp$reso)
+
+anyNA(data_exp)
+
+
+rownames(W.dis)
+
+
+#stack it how we want it 
+data_exp<-data_exp[order(data_exp$year,match(data_exp$iso2c,rownames(W.dis))),]#stack by year first
+data_exp<-data_exp[order(match(data_exp$iso2c,rownames(W.dis)), data_exp$year),]#stack by Country first
+
+
+##-------------------Fromula
+
+head(data_exp)
+fm<-ihs(value)~log(population)+log(gdppc*population)+log(tradec)+ log(reso)+log(dist)+log(GDP_po)+bits+log(pol)+log(fin)+log(eco)+log(lit)#singular mit der gleichung, wenn ich population und gdppc raushau gehts
+#fm<-ihs(value)~Within(log(population))+Within(log(gdppc))+tradec+reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit
+#fm<-ihs(value)~Within(log(population))+Within(log(gdppc))+Within(tradec)+Within(reso)+log(dist)+Within(log(GDP_po))+bits+Within(pol)+Within(fin)+Within(eco)+Within(lit)
+#fm<-ihs(value)~log(population)+log(gdppc)+log(tradec)+ reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit
+
+
+
+#la grange multiplier test
+
+slmer <- slmtest(fm,data = data_exp ,listw=W.list.inv, test="lme")
+slmer
+slmlag<- slmtest(fm,data = data_exp ,listw=W.list.inv, test="lml")
+slmlag
+
+slmler <- slmtest(fm,data = data_exp ,listw=W.list.inv, test="rlme")
+slmler
+
+slmtest(fm,data = data_exp ,listw=W.list.inv, test="rlml")
+
+#geht nur wenn wir bits und dist weglassen
+spherr <- sphtest(x=fm,data = data_exp ,listw=W.list.inv, spatial.model="sarar", method="ML")
+spherr
+
+Within()
+
+bsktest(x=fm, data = data_exp ,listw=W.list.inv, test="LM1")
+bsktest(x=fm, data = data_exp ,listw=W.list.inv, test="CLMmu")
+bsktest(x=fm, data = data_exp ,listw=W.list.inv, test="CLMlambda")
+
+bsjktest(x=fm, data = data_exp ,listw=W.list.inv, test="C.2")
+bsjktest(x=fm, data = data_exp ,listw=W.list.inv, test="C.3")
+
+sararre <- spreml(fm, data_exp ,w=W.list.inv, lag = TRUE, errors = "semsr")
+summary(sararre)
+#how to get the impacts? 
+
+
+#vlt sollten wir GDP ohne per capita nehmen
+
+
+#sarsem<-spml(fm, data_exp, listw=W.list.inv, lag=TRUE, spatial.error="kkp", model="within", effect="twoways", method="eigen", quiet=TRUE, zero.policy=NULL, tol.solce=1e-10)
+
+sarsem<-spml(fm, data_exp, listw=W.list.inv,model="random", lag=TRUE, spatial.error="b")
+
+summary(sarsem)
+time <- length(unique(data_exp$year))
+impacts(sarsem, listw = W.list.inv, time = time)
+#countrycode um iso2 zu bekommen 
+
+#mice package impotiert datensätze für natural recources verwenden # hab daweil mal igeine lösung
+
+#literacy variable bearbeiten 
+
+
+#---------------------------------------------estimate plm Model as in the paper without lit and gdp_po
+
+plmfm<-ihs(value)~log(population)+log(gdppc)+log(tradec)+ log(reso)+log(dist)+bits+log(pol)+log(fin)+log(eco)
+
+plm<-plm(plmfm, data_exp, model = "random")
+summary(plm)
+
+
+#---------------------------------------------estimate it without panel data framework
+
+Durbin <- lagsarlm(formula = fm, listw = W.list.inv, type="mixed", data=data_exp, tol.solve=1.0e-30)
+summary(Durbin, correlation=FALSE)
+
+@
+
+
+\end{document}
