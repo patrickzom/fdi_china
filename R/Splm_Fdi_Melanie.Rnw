@@ -15,10 +15,8 @@ library(countrycode)
 library(data.table)
 library(mice)
 library(splm)
-
-
-getwd()
-setwd("..")
+library(ggplot2)
+library(reshape2)
 
 
 data_exp<-readRDS("./data/FDI_data.rds")
@@ -31,6 +29,9 @@ ihs <- function(x) {
     return(y)
 }# alternative Box cox transform
 
+
+
+
 #-----------------------------------------------------Testing
 
 
@@ -39,9 +40,9 @@ anyNA(data_exp)
 
 rownames(W.dis)
 
-#stack it how we want it 
-data_exp_year<-data_exp[order(data_exp$year,match(data_exp$iso2c,rownames(W.dis))),]#stack by year first
-data_exp_cou<-data_exp[order(match(data_exp$iso2c,rownames(W.dis)), data_exp$year),]#stack by Countr first
+#data_exp is stacked by country
+data_exp_year<-data_exp[order(data_exp$year,match(data_exp$iso2c,rownames(W.dis))),] #stacked by year
+
 
 
 ##-------------------Fromula
@@ -49,13 +50,72 @@ data_exp_cou<-data_exp[order(match(data_exp$iso2c,rownames(W.dis)), data_exp$yea
 head(data_exp_year)
 head(data_exp_cou)
 
-fm<-ihs(value)~log(population)+log(gdppc)+tradec+reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit
+fm<-ihs(value)~log(population)+log(gdppc)+tradec+log(reso)+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit+as.numeric(year)+I(as.numeric(year)^2)
 
 #singular mit der gleichung, wenn ich population und gdppc raushau gehts
 #fm<-ihs(value)~Within(log(population))+Within(log(gdppc))+tradec+reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit
 #fm<-ihs(value)~Within(log(population))+Within(log(gdppc))+Within(tradec)+Within(reso)+log(dist)+Within(log(GDP_po))+bits+Within(pol)+Within(fin)+Within(eco)+Within(lit)
 
 
+##- 2. ESTIMATING
+# λ : (lambda) : Spatial autoregressive parameter
+# σ² ("phi") : Random effects
+# ρ : (rho) : Spatial error component
+# ψ (psi) : Serial correlation
+
+
+base <- spml(fm, data=data_exp_year, listw=W.list.inv, model="pooling", lag=FALSE, spatial.error="none")
+summary(base)
+-2*base$logLik+2*length(data_exp_year)
+
+
+# Full model including random effects ("model"), lagged dependent ("lag=TRUE") and spatial error ("spatial.error")
+sararreb <- spml(fm, data = data_exp_year, listw=W.list.inv, model="random", lag=TRUE, spatial.error="b")
+summary(sararreb)
+#Spatial autoregressive parameter, Random effects parameter are significant
+sararrekkp <- spml(fm, data = data_exp_year ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="kkp")
+summary(sararrekkp)
+#Spatial autoregressive parameter, Random effects parameter and Spatial error component are significant
+sararreb$logLik < sararrekkp$logLik
+
+##### ----- Unterschied zwischen b und kkp? Was sollen wir nehmen?
+
+
+# Model including random effects ("model"), lagged dependent ("lag=TRUE")
+sarreb <- spml(fm, data = data_exp_year ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="none")
+summary(sarreb)
+#Spatial autoregressive parameter, Random effects parameter are significant
+sarrekkp <- spml(fm, data = data_exp_year ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="none")
+summary(sarrekkp)
+#Spatial autoregressive parameter, Random effects parameter are significant
+sarreb$logLik = sarrekkp$logLik
+
+# Full model including random effects ("model"), lagged dependent ("lag=TRUE") and spatial error ("spatial.error")
+sararre <- spreml(fm, data_exp_year ,w=W.list.inv, lag = TRUE, errors = "semsrre")
+summary(sararre)
+#Serial correlation and spatial autroregressive parameter are significant
+
+sarsem<-spml(fm, data_exp, listw=W.list.inv, lag=TRUE, spatial.error="kkp", model="within", effect="twoways", method="eigen", quiet=TRUE, zero.policy=NULL, tol.solce=1e-10)
+
+summary(sarsem)
+effects(sarsem)
+#countrycode um iso2 zu bekommen 
+
+#mice package impotiert datensätze für natural recources verwenden # hab daweil mal igeine lösung
+
+#literacy variable bearbeiten 
+
+
+#Robustness checks with w-matrices
+
+
+
+@
+
+
+Testing
+
+<<>>=
 #Locally robust panel Lagrange Multiplier tests for spatial dependence
 #Should we use spatial lag or spatial error model or both?
 #Assumption: pooling assumption, i.e. they do not allow for any kind of individual effect
@@ -99,50 +159,19 @@ bsjktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="C.3") # p-value = 1
 
 #CONCLUSION: Spatial dependence in error terms and serial correlation but no random effects
 
-#What should we estimate now? 
-
-
-
-##- 2. ESTIMATING
-# λ : (lambda) : Spatial autoregressive parameter
-# σ² ("phi") : Random effects
-# ρ : (rho) : Spatial error component
-# ψ (psi) : Serial correlation
-
-# Full model including random effects ("model"), lagged dependent ("lag=TRUE") and spatial error ("spatial.error")
-sararreb <- spml(fm, data = data_exp_year ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="b")
-summary(sararreb)
-#Spatial autoregressive parameter, Random effects parameter are significant
-sararrekkp <- spml(fm, data = data_exp_year ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="kkp")
-summary(sararrekkp)
-#Spatial autoregressive parameter, Random effects parameter and Spatial error component are significant
-sararreb$logLik < sararrekkp$logLik
-
-# Model including random effects ("model"), lagged dependent ("lag=TRUE")
-sarreb <- spml(fm, data = data_exp_year ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="none")
-summary(sarreb)
-#Spatial autoregressive parameter, Random effects parameter are significant
-sarrekkp <- spml(fm, data = data_exp_year ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="none")
-summary(sarrekkp)
-#Spatial autoregressive parameter, Random effects parameter are significant
-sarreb$logLik = sarrekkp$logLik
-
-# Full model including random effects ("model"), lagged dependent ("lag=TRUE") and spatial error ("spatial.error")
-sararre <- spreml(fm, data_exp_year ,w=W.list.inv, lag = TRUE, errors = "semsrre")
-summary(sararre)
-#Serial correlation and spatial autroregressive parameter are significant
-
-sarsem<-spml(fm, data_exp, listw=W.list.inv, lag=TRUE, spatial.error="kkp", model="within", effect="twoways", method="eigen", quiet=TRUE, zero.policy=NULL, tol.solce=1e-10)
-
-summary(sarsem)
-effects(sarsem)
-#countrycode um iso2 zu bekommen 
-
-#mice package impotiert datensätze für natural recources verwenden # hab daweil mal igeine lösung
-
-#literacy variable bearbeiten 
-
+##### ----- What should we estimate now?
 @
+
+
+<<>>=
+ggplot(data_exp_year, aes(x=year, y=log(eco), group=iso2c, colour=iso2c))+
+  geom_line()+
+  geom_point()+
+  scale_x_continuous(breaks=data_exp_year$year)+
+  labs(x="Year", y="X")+
+  theme_minimal()
+@
+Trend: GDP_po; population; gdppc (nur leicht); pol, fin, eco (unterschiedliche Trends), 
 
 
 \end{document}
