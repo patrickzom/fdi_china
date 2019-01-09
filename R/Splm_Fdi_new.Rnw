@@ -1,0 +1,148 @@
+\documentclass{article}
+
+\begin{document}
+
+https://drive.google.com/file/d/1Oe__q_SkjiQkz33lqwD4gSUQ74B5GO_T/view
+<<>>=
+library(WDI)
+library(tidyr)
+library(dplyr)
+library(readxl)
+library(rgdal)
+library(spdep)
+library(GISTools)
+library(countrycode)
+library(data.table)
+library(mice)
+library(splm)
+
+
+getwd()
+setwd("..")
+
+
+data_exp<-readRDS("./data/FDI_data.rds")
+W.list.inv<-readRDS("./data/W.list.inv.rds")
+W.dis<-readRDS("./data/W.dis.rds")
+
+#-----------------------------------------------------Function
+ihs <- function(x) {
+    y <- log(x + sqrt(x ^ 2 + 1))
+    return(y)
+}# alternative Box cox transform
+
+#-----------------------------------------------------Testing
+
+
+anyNA(data_exp)
+
+
+rownames(W.dis)
+
+#stack it how we want it 
+data_exp_year<-data_exp[order(data_exp$year,match(data_exp$iso2c,rownames(W.dis))),]#stack by year first
+data_exp_cou<-data_exp[order(match(data_exp$iso2c,rownames(W.dis)), data_exp$year),]#stack by Countr first
+
+
+##-------------------Fromula
+
+head(data_exp_year)
+head(data_exp_cou)
+
+fm<-ihs(value)~log(population)+log(gdppc)+tradec+reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit
+
+#singular mit der gleichung, wenn ich population und gdppc raushau gehts
+#fm<-ihs(value)~Within(log(population))+Within(log(gdppc))+tradec+reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit
+#fm<-ihs(value)~Within(log(population))+Within(log(gdppc))+Within(tradec)+Within(reso)+log(dist)+Within(log(GDP_po))+bits+Within(pol)+Within(fin)+Within(eco)+Within(lit)
+
+
+#Locally robust panel Lagrange Multiplier tests for spatial dependence
+#Should we use spatial lag or spatial error model or both?
+#Assumption: pooling assumption, i.e. they do not allow for any kind of individual effect
+
+#Test for spatial error
+slmtest(fm,data = data_exp_year ,listw=W.list.inv, test="lme")
+#Result: LM = 2.5249, df = 1, p-value = 0.1121 -> no spatial error dependence
+
+#Test for spatial lag
+slmtest(fm,data = data_exp_year ,listw=W.list.inv, test="lml")
+#Result: LM = 7.3923, df = 1, p-value = 0.006551 -> spatial lag dependence
+
+#Test for spatial error given that we have spatial lag dependence
+slmtest(fm, data=data_exp_year, listw=W.list.inv, test="rlml")
+#Result: LM = 14.757, df = 1, p-value = 0.0001223 -> spatial error and spatial lag dependence
+
+#CONCLUSION: Spatial Lag or Spatial Lag & Error
+
+
+#Use sphtest to perform a spatial Hausmann test: fixed effects?
+#Cannot use ML due to Singularity problems
+sphtest(x=fm, data=data_exp_year, listw=W.list.inv, spatial.model="sarar", method="GM")
+#Result: chisq = 53.57, df = 10, p-value = 5.833e-08 -> Combined model is inconsistent - keep fixed effects model
+
+
+#"bsktest"
+bsktest(x=fm, data=data_exp_year, listw=W.list.inv, test="LMH") # p-value = 1.288e-14 -> Random Regional Effects and Spatial autocorrelation
+bsktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="LM1") # p-value = 1.555e-14 -> Random effects
+bsktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="LM2") # p-value = 0.1121 -> no spatial error correlation
+bsktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="CLMmu") # p-value < 2.2e-16 -> Random regional effects
+bsktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="CLMlambda") # p-value = 0.118 -> no spatial error correlation
+
+#CONCLUSION: Random effects but no spatial error correlation
+
+
+#"bsjktest" - Is there serial correlation on top?
+bsjktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="J") # p-value < 2.2e-16 -> random effects or serial corr. or spatial dependence in error terms
+bsjktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="C.1") # p-value = 0.04902 -> spatial dependence in error terms, sub RE and serial corr.
+bsjktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="C.2") # p-value = 1.134e-06 -> serial corr. in error terms, sub RE and spatial dependence
+bsjktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="C.3") # p-value = 1 -> no random effects, sub serial corr. and spatial dependence in error terms
+
+#CONCLUSION: Spatial dependence in error terms and serial correlation but no random effects
+
+#What should we estimate now? 
+
+
+
+##- 2. ESTIMATING
+# λ : (lambda) : Spatial autoregressive parameter
+# σ² ("phi") : Random effects
+# ρ : (rho) : Spatial error component
+# ψ (psi) : Serial correlation
+
+# Full model including random effects ("model"), lagged dependent ("lag=TRUE") and spatial error ("spatial.error")
+sararreb <- spml(fm, data = data_exp_year ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="b")
+summary(sararreb)
+#Spatial autoregressive parameter, Random effects parameter are significant
+sararrekkp <- spml(fm, data = data_exp_year ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="kkp")
+summary(sararrekkp)
+#Spatial autoregressive parameter, Random effects parameter and Spatial error component are significant
+sararreb$logLik < sararrekkp$logLik
+
+# Model including random effects ("model"), lagged dependent ("lag=TRUE")
+sarreb <- spml(fm, data = data_exp_year ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="none")
+summary(sarreb)
+#Spatial autoregressive parameter, Random effects parameter are significant
+sarrekkp <- spml(fm, data = data_exp_year ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="none")
+summary(sarrekkp)
+#Spatial autoregressive parameter, Random effects parameter are significant
+sarreb$logLik = sarrekkp$logLik
+
+# Full model including random effects ("model"), lagged dependent ("lag=TRUE") and spatial error ("spatial.error")
+sararre <- spreml(fm, data_exp_year ,w=W.list.inv, lag = TRUE, errors = "semsrre")
+summary(sararre)
+#Serial correlation and spatial autroregressive parameter are significant
+
+sarsem<-spml(fm, data_exp, listw=W.list.inv, lag=TRUE, spatial.error="kkp", model="within", effect="twoways", method="eigen", quiet=TRUE, zero.policy=NULL, tol.solce=1e-10)
+
+summary(sarsem)
+effects(sarsem)
+#countrycode um iso2 zu bekommen 
+
+#mice package impotiert datensätze für natural recources verwenden # hab daweil mal igeine lösung
+
+#literacy variable bearbeiten 
+
+@
+
+
+\end{document}
