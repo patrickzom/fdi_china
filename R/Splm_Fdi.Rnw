@@ -22,8 +22,14 @@ ihs <- function(x) {
     return(y)
 }# alternative Box cox transform
 
+subset(data_exp, select = -c(dist, bits))
+diff(subset(data_exp, select = -c(dist, bits)))
 
+lala<-pdata.frame(data_exp, c("iso2c", "year"))
 
+diff(subset(lala, select = -c(dist, bits, value)))
+
+diff(lala$year)
 
 getwd()
 setwd("..")
@@ -47,12 +53,14 @@ rownames(W.dis)
 data_exp<-data_exp[order(data_exp$year,match(data_exp$iso2c,rownames(W.dis))),]#stack by year first
 data_exp<-data_exp[order(match(data_exp$iso2c,rownames(W.dis)), data_exp$year),]#stack by Country first
 
+#data_exp$iso2c<-as.factor(data_exp$iso2c)
 
 ##-------------------Fromula
 
 head(data_exp)
-fm<-ihs(value)~log(population)+log(gdppc*population)+log(tradec)+ log(reso)+log(dist)+log(GDP_po)+bits+log(pol)+log(fin)+log(eco)+log(lit)#singular mit der gleichung, wenn ich population und gdppc raushau gehts
+fm<-ihs(value)~log(population)+log(gdppc*population)+pol+log(lit)#+log(tradec)+ log(reso*gdppc*population)+log(dist)+log(GDP_po)+pol+fin+eco+log(lit)+as.numeric(year)+I(as.numeric(year)^2)+bits#singular mit der gleichung, wenn ich population und gdppc raushau gehts
 #fm<-ihs(value)~Within(log(population))+Within(log(gdppc))+tradec+reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit
+
 #fm<-ihs(value)~Within(log(population))+Within(log(gdppc))+Within(tradec)+Within(reso)+log(dist)+Within(log(GDP_po))+bits+Within(pol)+Within(fin)+Within(eco)+Within(lit)
 #fm<-ihs(value)~log(population)+log(gdppc)+log(tradec)+ reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit
 
@@ -74,7 +82,7 @@ slmtest(fm,data = data_exp ,listw=W.list.inv, test="rlml")
 spherr <- sphtest(x=fm,data = data_exp ,listw=W.list.inv, spatial.model="sarar", method="ML")
 spherr
 
-Within()
+
 
 bsktest(x=fm, data = data_exp ,listw=W.list.inv, test="LM1")
 bsktest(x=fm, data = data_exp ,listw=W.list.inv, test="CLMmu")
@@ -83,7 +91,7 @@ bsktest(x=fm, data = data_exp ,listw=W.list.inv, test="CLMlambda")
 bsjktest(x=fm, data = data_exp ,listw=W.list.inv, test="C.2")
 bsjktest(x=fm, data = data_exp ,listw=W.list.inv, test="C.3")
 
-sararre <- spreml(fm, data_exp ,w=W.list.inv, lag = TRUE, errors = "semsr")
+sararre <- spreml(fm, data_exp ,w=W.list.inv, lag = FALSE, errors = "sr")
 summary(sararre)
 #how to get the impacts? 
 
@@ -91,13 +99,13 @@ summary(sararre)
 #vlt sollten wir GDP ohne per capita nehmen
 
 
-#sarsem<-spml(fm, data_exp, listw=W.list.inv, lag=TRUE, spatial.error="kkp", model="within", effect="twoways", method="eigen", quiet=TRUE, zero.policy=NULL, tol.solce=1e-10)
+#sarsem<-spml(fm, data_exp, listw=W.list.inv, lag=TRUE, spatial.error="kkp", model="within", effect="time", method="eigen", quiet=TRUE, zero.policy=NULL, tol.solce=1e-10)#komplett schlecht
 
-sarsem<-spml(fm, data_exp, listw=W.list.inv,model="random", lag=TRUE, spatial.error="b")
+sarsem<-spml(fm, data_exp, listw=W.list.inv,model="within", effect="twoways", lag=TRUE, spatial.error="non")
 
 summary(sarsem)
 time <- length(unique(data_exp$year))
-impacts(sarsem, listw = W.list.inv, time = time)
+impacts(sararre, listw = W.list.inv, time = time)
 #countrycode um iso2 zu bekommen 
 
 #mice package impotiert datensätze für natural recources verwenden # hab daweil mal igeine lösung
@@ -118,7 +126,73 @@ summary(plm)
 Durbin <- lagsarlm(formula = fm, listw = W.list.inv, type="mixed", data=data_exp, tol.solve=1.0e-30)
 summary(Durbin, correlation=FALSE)
 
+
+
+
+
+
+
+
+###################----------------------------------------------Different W matrices--------------########
+shp <- readOGR(dsn = "./data/Eurostat_RG_2016_4326_M01", layer ="CNTR_RG_01M_2016_4326", encoding = "UTF-8")
+
+shp <- shp[shp$CNTR_ID %in% rownames(W.dis), ]
+
+
+coords <-coordinates(shp)
+distw.tot <- dnearneigh(coords,0,Inf, row.names = shp$CNTR_ID)
+dnbdist.tot <- nbdists(distw.tot, coords)
+gl.tot <- lapply(dnbdist.tot, function(x) 1.345756/x) #calculating inverse distances and take x^2 because we want to put more weight on closer neighbours
+W.list.inv <- nb2listw(distw.tot, glist=gl.tot, zero.policy=FALSE, style = "W")
+W.dis<-listw2mat(W.list.inv)
+
+#selbes Ergebnis wie mit ^2 
+for(i in 1:35){
+print(min(dnbdist.tot[[i]]))
+}#to get the minimum distance 
+
+
+#-----------------------------------contiguity-------------------------------------------- 
+plot(shp)
+queen_nb <- poly2nb(shp, row.names = shp$CNTR_ID, queen = T)  #creates a neighborhoodlist
+W.list.queen <- nb2listw(queen_nb, style = "W", zero.policy = TRUE) #creates a weights-list
+W.queen <- listw2mat(W.list.queen) #creates a weigths matrix
+
+match("MZ", rownames(W.queen))
+W.queen[20,24]<-1
+
+W.list.queen<-mat2listw(W.queen, style = "W")
+W.list.inv<-W.list.queen
+W.dis<-W.queen
 @
+Fragen:
+
+-in welche Richtung sollen wir unsere Arbeit entwickeln? schätzen mit pooeld und time fixed effects, schauen ob serrial correlation ein Problem ist. Verschiedene Model von den Variablen her, Daten anschauen, Pol und co aufteilen aber nicht zu stark
+-bestimmen unser model mit test und AIC reicht das? so halb
+
+-distance measured with capital cities, we just use the centroit? 
+-sollen wir eco, fin und pol in die einzelteile zerlegen? ja können wir probieren, sonst in Gruppen unterteilen 
+-impacts von spreml? sollte gehen
+
+-wie haben sie das model in unserem Paper geschätzt? keine Ahnung
+-wovon sollen wir die logs nehmen? nicht von ECO und co 
+
+-stationarität? serial correlation 
+
+-linear interpolation, geht das auch mit mice, average years of schooling for those over age 25,
+reported every five years for 1960–2000? daweil nicht wichtig 
+-unterschied zwischen kkp und b und wann ich was verwende?
 
 
+
+
+
+
+To do:
+-Variablen aus eco und so rausnehmen. 
+-Reso ohne GDP 
+-Indices können einzeln reingegeben werden
+-fixed effects sichere Seit-> within ->oder time fixed effect
+-differnces schätzen
+-base plm mit Spatial vergleichen
 \end{document}
