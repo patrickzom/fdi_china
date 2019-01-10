@@ -30,10 +30,10 @@ ihs <- function(x) {
     return(y)
 }# alternative Box cox transform
 
-#-----------------------------------------------------Differencing - new data set is data_exp_cty
+#-----------------------------------------------------Differencing all - new data set is data_exp_cty
 
 data_exp.p <- data_exp %>%
-  mutate(gdp = gdppc*population) %>% #mutate(id = iso2c + year)
+  mutate(gdp = gdppc*population) %>%
   subset(select= -c(dist, bits, value)) %>%
   pdata.frame(row.names=TRUE)
 
@@ -50,7 +50,16 @@ out <- data_exp %>%
   mutate(id = paste(data_exp$iso2c, data_exp$year, sep="-"))
 
 data_exp_cty <- data_exp.p %>%
-  left_join(out, by="id")
+  left_join(out, by="id") %>%
+  mutate(ihspop = ihs(population)) %>%
+  mutate(ihsgdp = ihs(gdp))
+
+
+#-----------------------------------------------------Differencing only GDP, POP - new data set is data_exp_test
+
+data_exp_test <- data_exp %>%
+  mutate(gdp = gdppc*population) %>%
+  mutate(ggdp = diff(data_exp_test$gdp))
 
 #-----------------------------------------------------Testing
 
@@ -78,13 +87,22 @@ data_exp_year<-data_exp[order(data_exp$year,match(data_exp$iso2c,rownames(W.dis)
 head(data_exp_year)
 head(data_exp_cou)
 
-fm<-ihs(value)~log(population)+tradec+pol+lit
+fm<-ihs(value)~log(population)+log(gdp)+tradex+reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit
 
 #singular mit der gleichung, wenn ich population und gdppc raushau gehts
 #fm<-ihs(value)~Within(log(population))+Within(log(gdppc))+tradec+reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit
 #fm<-ihs(value)~Within(log(population))+Within(log(gdppc))+Within(tradec)+Within(reso)+log(dist)+Within(log(GDP_po))+bits+Within(pol)+Within(fin)+Within(eco)+Within(lit)
 
 
+
+#Robustness checks with w-matrices
+
+
+
+@
+
+
+<<>>=
 ##- 2. ESTIMATING
 # λ : (lambda) : Spatial autoregressive parameter
 # σ² ("phi") : Random effects
@@ -132,11 +150,6 @@ effects(sarsem)
 #mice package impotiert datensätze für natural recources verwenden # hab daweil mal igeine lösung
 
 #literacy variable bearbeiten 
-
-
-#Robustness checks with w-matrices
-
-
 
 @
 
@@ -192,10 +205,10 @@ bsjktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="C.3") # p-value = 1
 
 
 <<>>=
-ggplot(data_exp_year, aes(x=year, y=ihs(value), group=iso2c, colour=iso2c))+
+ggplot(data_exp_cty, aes(x=year, y=gdppc, group=iso2c, colour=iso2c))+
   geom_line()+
   geom_point()+
-  scale_x_continuous(breaks=data_exp_year$year)+
+  scale_x_continuous(breaks=data_exp_cty$year)+
   labs(x="Year", y="X")+
   theme_minimal()
 @
@@ -203,48 +216,106 @@ Trend: GDP_po; population; gdppc (nur leicht); pol, fin, eco (unterschiedliche T
 
 
 
-Dif
+Testing with non-stationary data
+
+Problem: logs nicht möglich für GDP, Population, gdppc, GDP_po, ihs nicht möglich für gdp, GDP_po
+
 <<>>=
+fm<-ihs(value)~gdppc+tradec+reso+log(dist)+bits+pol+fin+eco+lit#+ihs(GDP_po)
+
 #Locally robust panel Lagrange Multiplier tests for spatial dependence
 #Should we use spatial lag or spatial error model or both?
 #Assumption: pooling assumption, i.e. they do not allow for any kind of individual effect
 
 #Test for spatial error
-slmtest(fm,data = data_exp.p ,listw=W.list.inv, test="lme")
-#Result: LM = 2.5249, df = 1, p-value = 0.1121 -> no spatial error dependence
+slmtest(fm,data= data_exp_cty ,listw=W.list.inv, test="lme")
+#Result: LM = 8.3068, df = 1, p-value = 0.00395 -> spatial error dependence
 
 #Test for spatial lag
-slmtest(fm,data = data_exp_year ,listw=W.list.inv, test="lml")
-#Result: LM = 7.3923, df = 1, p-value = 0.006551 -> spatial lag dependence
+slmtest(fm,data= data_exp_cty ,listw=W.list.inv, test="lml")
+#Result: LM = 5.2536, df = 1, p-value = 0.0219 -> spatial lag dependence
 
 #Test for spatial error given that we have spatial lag dependence
-slmtest(fm, data=data_exp_year, listw=W.list.inv, test="rlml")
-#Result: LM = 14.757, df = 1, p-value = 0.0001223 -> spatial error and spatial lag dependence
+slmtest(fm, data= data_exp_cty, listw=W.list.inv, test="rlml")
+#Result: LM = 4.3137, df = 1, p-value = 0.03781 -> spatial error and spatial lag dependence
 
 #CONCLUSION: Spatial Lag or Spatial Lag & Error
 
 
 #Use sphtest to perform a spatial Hausmann test: fixed effects?
 #Cannot use ML due to Singularity problems
-sphtest(x=fm, data=data_exp_year, listw=W.list.inv, spatial.model="error", method="ML")
-#Result: chisq = 53.57, df = 10, p-value = 5.833e-08 -> Combined model is inconsistent - keep fixed effects model
+sphtest(x=fm, data=data_exp_cty, listw=W.list.inv, spatial.model="sarar", method="GM")
+#Result: chisq = 8.6118, df = 8, p-value = 0.3761 -> Combined model is inconsistent - keep fixed effects model
 
 
 #"bsktest"
-bsktest(x=fm, data=data_exp_year, listw=W.list.inv, test="LMH") # p-value = 1.288e-14 -> Random Regional Effects and Spatial autocorrelation
-bsktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="LM1") # p-value = 1.555e-14 -> Random effects
-bsktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="LM2") # p-value = 0.1121 -> no spatial error correlation
-bsktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="CLMmu") # p-value < 2.2e-16 -> Random regional effects
-bsktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="CLMlambda") # p-value = 0.118 -> no spatial error correlation
+bsktest(x=fm, data = data_exp_cty, listw=W.list.inv, test="LMH") # p-value < 2.2e-16 -> Random Regional Effects and Spatial autocorrelation
+bsktest(x=fm, data = data_exp_cty ,listw=W.list.inv, test="LM1") # p-value < 2.2e-16 -> Random effects
+bsktest(x=fm, data = data_exp_cty ,listw=W.list.inv, test="LM2") # p-value = 0.00395 -> spatial error correlation
+bsktest(x=fm, data = data_exp_cty ,listw=W.list.inv, test="CLMmu") # p-value < 2.2e-16 -> Random regional effects
+bsktest(x=fm, data = data_exp_cty ,listw=W.list.inv, test="CLMlambda") # p-value = 0.0005851 -> spatial error correlation
 
-#CONCLUSION: Random effects but no spatial error correlation
+#CONCLUSION: Random effects and spatial error correlation
 
 
 #"bsjktest" - Is there serial correlation on top?
-bsjktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="J") # p-value < 2.2e-16 -> random effects or serial corr. or spatial dependence in error terms
-bsjktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="C.1") # p-value = 0.04902 -> spatial dependence in error terms, sub RE and serial corr.
-bsjktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="C.2") # p-value = 1.134e-06 -> serial corr. in error terms, sub RE and spatial dependence
+bsjktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="J") # p-value = 2.807e-146 -> random effects or serial corr. or spatial dependence in error terms
+bsjktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="C.1") # p-value = 0.02766 -> spatial dependence in error terms, sub RE and serial corr.
+bsjktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="C.2") # p-value = 1.614e-07 -> serial corr. in error terms, sub RE and spatial dependence
 bsjktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="C.3") # p-value = 1 -> no random effects, sub serial corr. and spatial dependence in error terms
+@
+
+
+<<>>=
+##- 2. ESTIMATING
+# λ : (lambda) : Spatial autoregressive parameter
+# σ² ("phi") : Random effects
+# ρ : (rho) : Spatial error component
+# ψ (psi) : Serial correlation
+
+
+base <- spml(fm, data=data_exp_cty, listw=W.list.inv, model="pooling", lag=FALSE, spatial.error="none")
+summary(base)
+-2*base$logLik+2*length(data_exp_year)
+
+
+# Full model including random effects ("model"), lagged dependent ("lag=TRUE") and spatial error ("spatial.error")
+sararreb <- spml(fm, data = data_exp_year, listw=W.list.inv, model="random", lag=TRUE, spatial.error="b")
+summary(sararreb)
+#Spatial autoregressive parameter, Random effects parameter are significant
+sararrekkp <- spml(fm, data = data_exp_year ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="kkp")
+summary(sararrekkp)
+#Spatial autoregressive parameter, Random effects parameter and Spatial error component are significant
+sararreb$logLik < sararrekkp$logLik
+
+##### ----- Unterschied zwischen b und kkp? Was sollen wir nehmen?
+
+
+# Model including random effects ("model"), lagged dependent ("lag=TRUE")
+sarreb <- spml(fm, data = data_exp_year ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="none")
+summary(sarreb)
+#Spatial autoregressive parameter, Random effects parameter are significant
+sarrekkp <- spml(fm, data = data_exp_year ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="none")
+summary(sarrekkp)
+#Spatial autoregressive parameter, Random effects parameter are significant
+sarreb$logLik = sarrekkp$logLik
+
+# Full model including random effects ("model"), lagged dependent ("lag=TRUE") and spatial error ("spatial.error")
+sararre <- spreml(fm, data_exp_year ,w=W.list.inv, lag = TRUE, errors = "semsrre")
+summary(sararre)
+#Serial correlation and spatial autroregressive parameter are significant
+
+sarsem<-spml(fm, data_exp, listw=W.list.inv, lag=TRUE, spatial.error="kkp", model="within", effect="twoways", method="eigen", quiet=TRUE, zero.policy=NULL, tol.solce=1e-10)
+
+summary(sarsem)
+effects(sarsem)
+#countrycode um iso2 zu bekommen 
+
+#mice package impotiert datensätze für natural recources verwenden # hab daweil mal igeine lösung
+
+#literacy variable bearbeiten 
+
+
 @
 
 
