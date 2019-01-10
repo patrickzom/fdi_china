@@ -3,7 +3,7 @@
 \begin{document}
 
 https://drive.google.com/file/d/1Oe__q_SkjiQkz33lqwD4gSUQ74B5GO_T/view
-<<>>=
+<<label=Preparation>>=
 library(WDI)
 library(plm)
 library(tidyr)
@@ -34,38 +34,33 @@ ihs <- function(x) {
 
 data_exp.p <- data_exp %>%
   mutate(gdp = gdppc*population) %>%
-  subset(select= -c(dist, bits, value)) %>%
-  pdata.frame(row.names=TRUE)
+  mutate(gdp_popop = GDP_po / population) %>% #not correct but preleminary
+  subset(select= c(iso2c, year, population, gdp, gdppc, GDP_po, gdp_popop)) %>%
+  pdata.frame(row.names=TRUE) %>%
+  subset(select= -c(iso2c, year))
 
-for(i in 3:12){
+for(i in 1:ncol(data_exp.p)){
   data_exp.p[,i] <- diff(data_exp.p[,i])
 }
 
 data_exp.p <- data_exp.p %>% 
-  mutate(id = row.names(data_exp.p)) %>% 
-  na.omit()
+  mutate(id = row.names(data_exp.p))
 
 out <- data_exp %>%
-  subset(select= c(dist, bits, value)) %>%
+  subset(select= -c(population, gdppc, GDP_po)) %>%
   mutate(id = paste(data_exp$iso2c, data_exp$year, sep="-"))
 
-data_exp_cty <- data_exp.p %>%
-  left_join(out, by="id") %>%
-  mutate(ihspop = ihs(population)) %>%
-  mutate(ihsgdp = ihs(gdp))
+data_exp_cty <- out %>%
+  left_join(data_exp.p, by="id") %>%
+  na.omit() 
+
+remove(out)
+remove(data_exp.p)
 
 
-#-----------------------------------------------------Differencing only GDP, POP - new data set is data_exp_test
+#-----------------------------------------------------more preparation
 
-data_exp_test <- data_exp %>%
-  mutate(gdp = gdppc*population) %>%
-  mutate(ggdp = diff(data_exp_test$gdp))
-
-#-----------------------------------------------------Testing
-
-
-anyNA(data_exp)
-
+anyNA(data_exp_cty)
 
 rownames(W.dis)
 
@@ -87,12 +82,10 @@ data_exp_year<-data_exp[order(data_exp$year,match(data_exp$iso2c,rownames(W.dis)
 head(data_exp_year)
 head(data_exp_cou)
 
-fm<-ihs(value)~log(population)+log(gdp)+tradex+reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit
 
 #singular mit der gleichung, wenn ich population und gdppc raushau gehts
 #fm<-ihs(value)~Within(log(population))+Within(log(gdppc))+tradec+reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit
 #fm<-ihs(value)~Within(log(population))+Within(log(gdppc))+Within(tradec)+Within(reso)+log(dist)+Within(log(GDP_po))+bits+Within(pol)+Within(fin)+Within(eco)+Within(lit)
-
 
 
 #Robustness checks with w-matrices
@@ -102,13 +95,14 @@ fm<-ihs(value)~log(population)+log(gdp)+tradex+reso+log(dist)+log(GDP_po)+bits+p
 @
 
 
-<<>>=
+<<Estimation with data_exp_year>>=
 ##- 2. ESTIMATING
 # λ : (lambda) : Spatial autoregressive parameter
 # σ² ("phi") : Random effects
 # ρ : (rho) : Spatial error component
 # ψ (psi) : Serial correlation
 
+fm<-ihs(value)~log(population)+log(gdppc)+tradex+reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit
 
 base <- spml(fm, data=data_exp_year, listw=W.list.inv, model="pooling", lag=FALSE, spatial.error="none")
 summary(base)
@@ -156,7 +150,7 @@ effects(sarsem)
 
 Testing stacked by year
 
-<<>>=
+<<Testing with data_exp_year>>=
 #Locally robust panel Lagrange Multiplier tests for spatial dependence
 #Should we use spatial lag or spatial error model or both?
 #Assumption: pooling assumption, i.e. they do not allow for any kind of individual effect
@@ -204,24 +198,34 @@ bsjktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="C.3") # p-value = 1
 @
 
 
-<<>>=
-ggplot(data_exp_cty, aes(x=year, y=gdppc, group=iso2c, colour=iso2c))+
+<<ggplot with data_exp_year>>=
+ggplot(data_exp_year, aes(x=year, y=reso, group=iso2c, colour=iso2c))+
   geom_line()+
   geom_point()+
-  scale_x_continuous(breaks=data_exp_cty$year)+
+  scale_x_continuous(breaks=data_exp_year$year)+
   labs(x="Year", y="X")+
   theme_minimal()
 @
 Trend: GDP_po; population; gdppc (nur leicht); pol, fin, eco (unterschiedliche Trends), 
 
 
+<<ggplot with data_exp_cty>>=
+ggplot(data_exp_cty, aes(x=as.numeric(year), y=ihs(gdppc), group=iso2c, colour=iso2c))+
+  geom_line()+
+  geom_point()+
+  scale_x_continuous(breaks=as.numeric(data_exp_cty$year))+
+  labs(x="Year", y="X")+
+  theme_minimal()
+@
 
-Testing with non-stationary data
 
-Problem: logs nicht möglich für GDP, Population, gdppc, GDP_po, ihs nicht möglich für gdp, GDP_po
+Testing with stationary data
 
-<<>>=
-fm<-ihs(value)~gdppc+tradec+reso+log(dist)+bits+pol+fin+eco+lit#+ihs(GDP_po)
+Problem: logs nicht möglich für GDP, Population, gdppc, GDP_po, gpd_popop und ihs nicht möglich für gdp, GDP_po
+Alternative: nur gdppc und gdp_popop
+
+<<Testing with data_exp_cty>>=
+fm<-ihs(value)~ihs(gdppc)+ihs(gdp_popop)+tradec+reso+log(dist)+bits+pol+fin+eco+lit+as.numeric(year)+I(as.numeric(year)^2)
 
 #Locally robust panel Lagrange Multiplier tests for spatial dependence
 #Should we use spatial lag or spatial error model or both?
@@ -229,11 +233,11 @@ fm<-ihs(value)~gdppc+tradec+reso+log(dist)+bits+pol+fin+eco+lit#+ihs(GDP_po)
 
 #Test for spatial error
 slmtest(fm,data= data_exp_cty ,listw=W.list.inv, test="lme")
-#Result: LM = 8.3068, df = 1, p-value = 0.00395 -> spatial error dependence
+#Result: LM = 0.063625, df = 1, p-value = 0.8009 -> no spatial error dependence
 
 #Test for spatial lag
 slmtest(fm,data= data_exp_cty ,listw=W.list.inv, test="lml")
-#Result: LM = 5.2536, df = 1, p-value = 0.0219 -> spatial lag dependence
+#Result: LM = 5.2536, df = 1, p-value = 0.0219 -> no spatial lag dependence
 
 #Test for spatial error given that we have spatial lag dependence
 slmtest(fm, data= data_exp_cty, listw=W.list.inv, test="rlml")
@@ -251,7 +255,7 @@ sphtest(x=fm, data=data_exp_cty, listw=W.list.inv, spatial.model="sarar", method
 #"bsktest"
 bsktest(x=fm, data = data_exp_cty, listw=W.list.inv, test="LMH") # p-value < 2.2e-16 -> Random Regional Effects and Spatial autocorrelation
 bsktest(x=fm, data = data_exp_cty ,listw=W.list.inv, test="LM1") # p-value < 2.2e-16 -> Random effects
-bsktest(x=fm, data = data_exp_cty ,listw=W.list.inv, test="LM2") # p-value = 0.00395 -> spatial error correlation
+bsktest(x=fm, data = data_exp_cty ,listw=W.list.inv, test="LM2") # Problem: p-value = 1.179 !!!!!!
 bsktest(x=fm, data = data_exp_cty ,listw=W.list.inv, test="CLMmu") # p-value < 2.2e-16 -> Random regional effects
 bsktest(x=fm, data = data_exp_cty ,listw=W.list.inv, test="CLMlambda") # p-value = 0.0005851 -> spatial error correlation
 
@@ -259,31 +263,34 @@ bsktest(x=fm, data = data_exp_cty ,listw=W.list.inv, test="CLMlambda") # p-value
 
 
 #"bsjktest" - Is there serial correlation on top?
-bsjktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="J") # p-value = 2.807e-146 -> random effects or serial corr. or spatial dependence in error terms
-bsjktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="C.1") # p-value = 0.02766 -> spatial dependence in error terms, sub RE and serial corr.
-bsjktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="C.2") # p-value = 1.614e-07 -> serial corr. in error terms, sub RE and spatial dependence
-bsjktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="C.3") # p-value = 1 -> no random effects, sub serial corr. and spatial dependence in error terms
+bsjktest(x=fm, data = data_exp_cty ,listw=W.list.inv, test="J") # p-value = 2.807e-146 -> random effects or serial corr. or spatial dependence in error terms
+bsjktest(x=fm, data = data_exp_cty ,listw=W.list.inv, test="C.1") # p-value = 0.02766 -> spatial dependence in error terms, sub RE and serial corr.
+bsjktest(x=fm, data = data_exp_cty ,listw=W.list.inv, test="C.2") # p-value = 1.614e-07 -> serial corr. in error terms, sub RE and spatial dependence
+bsjktest(x=fm, data = data_exp_cty ,listw=W.list.inv, test="C.3") # p-value = 1 -> no random effects, sub serial corr. and spatial dependence in error terms
 @
 
 
-<<>>=
+<<Estimation with data_exp_cty>>=
 ##- 2. ESTIMATING
 # λ : (lambda) : Spatial autoregressive parameter
 # σ² ("phi") : Random effects
 # ρ : (rho) : Spatial error component
 # ψ (psi) : Serial correlation
 
+fm<-ihs(value)~ihs(gdppc)+ihs(gdp_popop)+tradec+reso+log(dist)+bits+pol+fin+eco+lit+as.numeric(year)
 
 base <- spml(fm, data=data_exp_cty, listw=W.list.inv, model="pooling", lag=FALSE, spatial.error="none")
 summary(base)
--2*base$logLik+2*length(data_exp_year)
+-2*base$logLik+2*length(data_exp_cty)
 
+b <- lm(fm, data=data_exp_cty)
+summary(b)
 
 # Full model including random effects ("model"), lagged dependent ("lag=TRUE") and spatial error ("spatial.error")
-sararreb <- spml(fm, data = data_exp_year, listw=W.list.inv, model="random", lag=TRUE, spatial.error="b")
+sararreb <- spml(fm, data = data_exp_cty, listw=W.list.inv, model="random", lag=TRUE, spatial.error="b")
 summary(sararreb)
 #Spatial autoregressive parameter, Random effects parameter are significant
-sararrekkp <- spml(fm, data = data_exp_year ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="kkp")
+sararrekkp <- spml(fm, data = data_exp_cty, listw=W.list.inv, model="random", lag=TRUE, spatial.error="kkp")
 summary(sararrekkp)
 #Spatial autoregressive parameter, Random effects parameter and Spatial error component are significant
 sararreb$logLik < sararrekkp$logLik
@@ -292,20 +299,20 @@ sararreb$logLik < sararrekkp$logLik
 
 
 # Model including random effects ("model"), lagged dependent ("lag=TRUE")
-sarreb <- spml(fm, data = data_exp_year ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="none")
+sarreb <- spml(fm, data = data_exp_cty ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="none")
 summary(sarreb)
 #Spatial autoregressive parameter, Random effects parameter are significant
-sarrekkp <- spml(fm, data = data_exp_year ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="none")
+sarrekkp <- spml(fm, data = data_exp_cty ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="none")
 summary(sarrekkp)
 #Spatial autoregressive parameter, Random effects parameter are significant
 sarreb$logLik = sarrekkp$logLik
 
 # Full model including random effects ("model"), lagged dependent ("lag=TRUE") and spatial error ("spatial.error")
-sararre <- spreml(fm, data_exp_year ,w=W.list.inv, lag = TRUE, errors = "semsrre")
+sararre <- spreml(fm, data_exp_cty ,w=W.list.inv, lag = FALSE, errors = "ols")
 summary(sararre)
 #Serial correlation and spatial autroregressive parameter are significant
 
-sarsem<-spml(fm, data_exp, listw=W.list.inv, lag=TRUE, spatial.error="kkp", model="within", effect="twoways", method="eigen", quiet=TRUE, zero.policy=NULL, tol.solce=1e-10)
+sarsem<-spml(fm, data_exp_cty, listw=W.list.inv, lag=TRUE, spatial.error="kkp", model="within", effect="time", method="eigen", quiet=TRUE, zero.policy=NULL, tol.solce=1e-10)
 
 summary(sarsem)
 effects(sarsem)
