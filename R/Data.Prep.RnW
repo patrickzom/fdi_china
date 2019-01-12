@@ -11,6 +11,14 @@ library(readxl)
 library(rgdal)
 library(spdep)
 library(GISTools)
+library(readxl)
+library(data.table)
+
+full_excel_read<-function(fpath,v=TRUE, skip=FALSE){
+
+  sheetnames <- excel_sheets(fpath)
+  workbook <- sapply(sheetnames,function (x){readxl::read_excel(fpath,sheet = x, skip = skip)})
+}
 @
 
 TEST if GitHub Desktop works
@@ -18,7 +26,7 @@ TEST if GitHub Desktop works
 <<>>=
 #Working dirctory
 setwd("C:/WU/Master/Spatial/Projekt") #Matthias Lokation
-setwd("C:/Users/melan/Documents/0686 Spatial Economics/Projekt") #Melanie Location
+setwd("C:/Users/melan/Documents/0686 Spatial Economics/fdi_china") #Melanie Location
 getwd()
 @
 
@@ -57,15 +65,6 @@ shp <- shp[shp$NAME_ENGL %in% africa, ]
 
 <<>>=
 #Loading the political data
-library(readxl)
-library(data.table)
-
-full_excel_read<-function(fpath,v=TRUE, skip=FALSE){
-
-  sheetnames <- excel_sheets(fpath)
-  workbook <- sapply(sheetnames,function (x){readxl::read_excel(fpath,sheet = x, skip = skip)})
-}
-
 
 pol<-full_excel_read("./data/3BResearchersDataset2018.xls", v=FALSE, skip = 6)
 pol<-pol[c(2:13)]
@@ -83,6 +82,20 @@ anyNA(POL)
 POL<-na.omit(POL)
 
 me<-POL%>%group_by(Country)%>%summarise(sum03 = sum(`2003`), sum04 = sum(`2004`),sum05 = sum(`2005`), sum06 = sum(`2006`),sum07 = sum(`2007`), sum08 = sum(`2008`),sum09 = sum(`2009`), sum10 = sum(`2010`),sum11 = sum(`2011`), sum12 = sum(`2012`), sum13 = sum(`2013`), sum14 = sum(`2014`), sum15 = sum(`2015`))
+
+GovStab <- POL %>% group_by(.id) %>% filter(.id=="A-Government Stability")
+Socio <- POL %>% group_by(.id) %>% filter(.id=="B-Socioeconomic Conditions")
+InvProf <- POL %>% group_by(.id) %>% filter(.id=="C-Investment Profile")
+IntConf<- POL %>% group_by(.id) %>% filter(.id=="D-Internal Conflict")
+ExtConf<- POL %>% group_by(.id) %>% filter(.id=="E-External Conflict")
+Corrup<- POL %>% group_by(.id) %>% filter(.id=="F-Corruption")
+Milit<- POL %>% group_by(.id) %>% filter(.id=="G-Military in Politics")
+Reli<- POL %>% group_by(.id) %>% filter(.id=="H-Religious Tensions")
+Ethnic<- POL %>% group_by(.id) %>% filter(.id=="J-Ethnic Tensions")
+Democr<- POL %>% group_by(.id) %>% filter(.id=="K-Democratic Accountability")
+Bureau<- POL %>% group_by(.id) %>% filter(.id=="L-Bureaucracy Quality")
+
+
 @
 
 
@@ -103,6 +116,24 @@ FIN<-FIN[,-(3:21)]
 anyNA(FIN)
 
 FIN<-na.omit(FIN)
+
+ForDebt <- FIN %>% group_by(.id) %>% filter(.id=="ForDebt")
+XRStab <- FIN %>% group_by(.id) %>% filter(.id=="XRStab")
+DebtServ <- FIN %>% group_by(.id) %>% filter(.id=="DebtServ")
+CAXGS<- FIN %>% group_by(.id) %>% filter(.id=="CAXGS")
+IntLiq<- FIN %>% group_by(.id) %>% filter(.id=="IntLiq")
+
+
+@
+
+
+Moved upwards because "x" is needed!
+<<>>=
+# create vector with country IDs for the WDI filter
+data<-data[order(data$Year),]
+africa<-me$Country
+x<-shp@data
+x<-as.character(x$CNTR_ID)
 @
 
 
@@ -126,17 +157,21 @@ WDIsearch(string = "trade", short = TRUE, cache = NULL)
 
 data_WDI5<-WDI(country = "all", indicator = c("BG.GSR.NFSV.GD.ZS","CM.MKT.TRAD.CD"), start=2003, end=2015)
 
-data_WDI5 <- data_WDI4[data_WDI4$iso2c %in% x, ]
+data_WDI5 <- data_WDI5[data_WDI5$iso2c %in% x, ]
 @
+"BG.GSR.NFSV.GD.ZS" "Trade in services (\% of GDP)"
+"CM.MKT.TRAD.CD"    "Stocks traded, total value (current US$)"
 
+"SI.RMT.COST.OB.ZS"    "Average transaction cost of sending remittances from a specific country (\%)"                                   
+"SI.RMT.COST.IB.ZS"    "Average transaction cost of sending remittances to a specific country (\%)"
 <<>>=
 library(WDI)
-#-------------------------------------repatriatoin---------------------------------
+#-------------------------------------remittance---------------------------------
 WDIsearch(string = "remittance", short = TRUE, cache = NULL)
 
-data_WDI5<-WDI(country = "all", indicator = c("SI.RMT.COST.OB.ZS","SI.RMT.COST.IB.ZS"), start=2003, end=2015)
+data_WDI6<-WDI(country = "all", indicator = c("SI.RMT.COST.OB.ZS","SI.RMT.COST.IB.ZS"), start=2003, end=2015)
 
-data_WDI5 <- data_WDI4[data_WDI4$iso2c %in% x, ]
+data_WDI6 <- data_WDI6[data_WDI6$iso2c %in% x, ]
 @
 
 
@@ -157,15 +192,6 @@ zero<-as.data.frame(zero)
 @
 
 
-<<>>=
-# create vector with country IDs for the WDI filter
-data<-data[order(data$Year),]
-africa<-me$Country
-x<-shp@data
-x<-as.character(x$CNTR_ID)
-@
-
-TESTTESTTEST
 
 <<>>=
 # get the variables gdp per capita and population 
