@@ -19,7 +19,7 @@ library(splm)
 library(ggplot2)
 library(reshape2)
 
-
+data <- readRDS("./data/data_full.RData")
 data_exp<-readRDS("./data/FDI_data.rds")
 W.list.inv<-readRDS("./data/W.list.inv.rds")
 W.dis<-readRDS("./data/W.dis.rds")
@@ -32,30 +32,25 @@ ihs <- function(x) {
 
 #-----------------------------------------------------Differencing all - new data set is data_exp_cty
 
-data_exp.p <- data_exp %>%
+data.p <- data %>%
   mutate(gdp = gdppc*population) %>%
-  mutate(gdp_popop = GDP_po / population) %>% #not correct but preleminary
-  subset(select= c(iso2c, year, population, gdp, gdppc, GDP_po, gdp_popop)) %>%
-  pdata.frame(row.names=TRUE) %>%
+  subset(select= c(iso2c, year, population, gdp, gdppc, GDP_po, gdppc_po)) %>%
+  pdata.frame(row.names=TRUE) #%>%
   subset(select= -c(iso2c, year))
 
-for(i in 1:ncol(data_exp.p)){
-  data_exp.p[,i] <- diff(data_exp.p[,i])
+for(i in 3:ncol(data.p)){
+  data.p[,i] <- diff(data.p[,i])
 }
 
-data_exp.p <- data_exp.p %>% 
-  mutate(id = row.names(data_exp.p))
+out <- data %>%
+  subset(select= -c(population, gdppc, GDP_po, gdppc_po)) 
 
-out <- data_exp %>%
-  subset(select= -c(population, gdppc, GDP_po)) %>%
-  mutate(id = paste(data_exp$iso2c, data_exp$year, sep="-"))
-
-data_exp_cty <- out %>%
-  left_join(data_exp.p, by="id") %>%
-  na.omit() 
+data_cty <- out %>%
+  left_join(data.p, by=c("iso2c", "year")) %>%
+  na.omit()
 
 remove(out)
-remove(data_exp.p)
+remove(data.p)
 
 
 #-----------------------------------------------------more preparation
