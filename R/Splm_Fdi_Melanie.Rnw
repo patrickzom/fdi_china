@@ -18,6 +18,7 @@ library(mice)
 library(splm)
 library(ggplot2)
 library(reshape2)
+library(gdata)
 
 data <- readRDS("./data/data_full.RData")
 data_exp<-readRDS("./data/FDI_data.rds")
@@ -35,27 +36,23 @@ ihs <- function(x) {
 data.p <- data %>%
   mutate(gdp = gdppc*population) %>%
   subset(select= c(iso2c, year, population, gdp, gdppc, GDP_po, gdppc_po)) %>%
-  pdata.frame(row.names=TRUE) #%>%
-  subset(select= -c(iso2c, year))
+  rename.vars(from=c("population", "gdp", "gdppc", "GDP_po", "gdppc_po"), to=c("pop_g", "gdp_g", "gdppc_g", "GDP_po_g", "gdppc_po_g")) %>%
+  pdata.frame(row.names=TRUE)
 
 for(i in 3:ncol(data.p)){
   data.p[,i] <- diff(data.p[,i])
 }
 
-out <- data %>%
-  subset(select= -c(population, gdppc, GDP_po, gdppc_po)) 
-
-data_cty <- out %>%
+data_cty <- data %>%
   left_join(data.p, by=c("iso2c", "year")) %>%
   na.omit()
 
-remove(out)
 remove(data.p)
 
 
 #-----------------------------------------------------more preparation
 
-anyNA(data_exp_cty)
+anyNA(data_cty)
 
 rownames(W.dis)
 
@@ -205,10 +202,10 @@ Trend: GDP_po; population; gdppc (nur leicht); pol, fin, eco (unterschiedliche T
 
 
 <<ggplot with data_exp_cty>>=
-ggplot(data_exp_cty, aes(x=as.numeric(year), y=ihs(gdppc), group=iso2c, colour=iso2c))+
+ggplot(data_cty, aes(x=as.numeric(year), y=gdppc_po, group=iso2c, colour=iso2c))+
   geom_line()+
   geom_point()+
-  scale_x_continuous(breaks=as.numeric(data_exp_cty$year))+
+  scale_x_continuous(breaks=as.numeric(data_cty$year))+
   labs(x="Year", y="X")+
   theme_minimal()
 @
@@ -219,103 +216,161 @@ Testing with stationary data
 Problem: logs nicht möglich für GDP, Population, gdppc, GDP_po, gpd_popop und ihs nicht möglich für gdp, GDP_po
 Alternative: nur gdppc und gdp_popop
 
-<<Testing with data_exp_cty>>=
-fm<-ihs(value)~ihs(gdppc)+ihs(gdp_popop)+tradec+reso+log(dist)+bits+pol+fin+eco+lit+as.numeric(year)+I(as.numeric(year)^2)
+<<Testing with data_cty>>=
+fm<-ihs(value)~ihs(gdppc)+ihs(gdppc_po)+tradec+reso+log(dist)+bits+pol+fin+eco+lit+as.numeric(year)+I(as.numeric(year)^2)
 
 #Locally robust panel Lagrange Multiplier tests for spatial dependence
 #Should we use spatial lag or spatial error model or both?
 #Assumption: pooling assumption, i.e. they do not allow for any kind of individual effect
 
 #Test for spatial error
-slmtest(fm,data= data_exp_cty ,listw=W.list.inv, test="lme")
-#Result: LM = 0.063625, df = 1, p-value = 0.8009 -> no spatial error dependence
+slmtest(fm,data= data_cty ,listw=W.list.inv, test="lme")
+#Result: LM = 0.12751, df = 1, p-value = 0.721 -> no spatial error dependence
 
 #Test for spatial lag
-slmtest(fm,data= data_exp_cty ,listw=W.list.inv, test="lml")
-#Result: LM = 5.2536, df = 1, p-value = 0.0219 -> no spatial lag dependence
+slmtest(fm,data= data_cty ,listw=W.list.inv, test="lml")
+#Result: LM = 0.92328, df = 1, p-value = 0.3366 -> no spatial lag dependence
+
+#Test for spatial lag given that we have spatial error dependence
+slmtest(fm, data= data_cty, listw=W.list.inv, test="rlme")
+#Result: LM = 5.9728, df = 1, p-value = 0.01453 -> spatial error and spatial lag dependence
 
 #Test for spatial error given that we have spatial lag dependence
-slmtest(fm, data= data_exp_cty, listw=W.list.inv, test="rlml")
-#Result: LM = 4.3137, df = 1, p-value = 0.03781 -> spatial error and spatial lag dependence
-
-#CONCLUSION: Spatial Lag or Spatial Lag & Error
+slmtest(fm, data= data_cty, listw=W.list.inv, test="rlml")
+#Result: LM = 6.7685, df = 1, p-value = 0.009278 -> spatial error and spatial lag dependence
+#CONCLUSION: Spatial Lag & Error or none
 
 
 #Use sphtest to perform a spatial Hausmann test: fixed effects?
 #Cannot use ML due to Singularity problems
-sphtest(x=fm, data=data_exp_cty, listw=W.list.inv, spatial.model="sarar", method="GM")
-#Result: chisq = 8.6118, df = 8, p-value = 0.3761 -> Combined model is inconsistent - keep fixed effects model
+sphtest(x=fm, data=data_cty, listw=W.list.inv, spatial.model="sarar", method="GM")
+#Result: chisq = 198.75, df = 10, p-value < 2.2e-16 -> Combined model is inconsistent - keep fixed effects model
 
 
 #"bsktest"
-bsktest(x=fm, data = data_exp_cty, listw=W.list.inv, test="LMH") # p-value < 2.2e-16 -> Random Regional Effects and Spatial autocorrelation
-bsktest(x=fm, data = data_exp_cty ,listw=W.list.inv, test="LM1") # p-value < 2.2e-16 -> Random effects
-bsktest(x=fm, data = data_exp_cty ,listw=W.list.inv, test="LM2") # Problem: p-value = 1.179 !!!!!!
-bsktest(x=fm, data = data_exp_cty ,listw=W.list.inv, test="CLMmu") # p-value < 2.2e-16 -> Random regional effects
-bsktest(x=fm, data = data_exp_cty ,listw=W.list.inv, test="CLMlambda") # p-value = 0.0005851 -> spatial error correlation
-
+bsktest(x=fm, data = data_cty, listw=W.list.inv, test="LMH") # p-value < 2.2e-16 -> Random Regional Effects and Spatial autocorrelation
+bsktest(x=fm, data = data_cty ,listw=W.list.inv, test="LM1") # p-value < 2.2e-16 -> Random effects
+bsktest(x=fm, data = data_cty ,listw=W.list.inv, test="LM2") # Problem: LM2 = -0.35708, p-value = 1.279 !!!!!!
+bsktest(x=fm, data = data_cty ,listw=W.list.inv, test="CLMmu") # p-value < 2.2e-16 -> Random regional effects
+bsktest(x=fm, data = data_cty ,listw=W.list.inv, test="CLMlambda") # p-value = 0.6586 -> No spatial error correlation
 #CONCLUSION: Random effects and spatial error correlation
 
 
 #"bsjktest" - Is there serial correlation on top?
-bsjktest(x=fm, data = data_exp_cty ,listw=W.list.inv, test="J") # p-value = 2.807e-146 -> random effects or serial corr. or spatial dependence in error terms
-bsjktest(x=fm, data = data_exp_cty ,listw=W.list.inv, test="C.1") # p-value = 0.02766 -> spatial dependence in error terms, sub RE and serial corr.
-bsjktest(x=fm, data = data_exp_cty ,listw=W.list.inv, test="C.2") # p-value = 1.614e-07 -> serial corr. in error terms, sub RE and spatial dependence
-bsjktest(x=fm, data = data_exp_cty ,listw=W.list.inv, test="C.3") # p-value = 1 -> no random effects, sub serial corr. and spatial dependence in error terms
+bsjktest(x=fm, data = data_cty ,listw=W.list.inv, test="J") # p-value < 2.2e-16 -> random effects or serial corr. or spatial dependence in error terms
+bsjktest(x=fm, data = data_cty ,listw=W.list.inv, test="C.1") # p-value = 0.4748 -> no spatial dependence in error terms, sub RE and serial corr.
+bsjktest(x=fm, data = data_cty ,listw=W.list.inv, test="C.2") # p-value = 9.081e-05 -> serial corr. in error terms, sub RE and spatial dependence
+bsjktest(x=fm, data = data_cty ,listw=W.list.inv, test="C.3") # p-value = 1 -> no random effects, sub serial corr. and spatial dependence in error terms
 @
 
 
-<<Estimation with data_exp_cty>>=
+<<Estimation with data_cty>>=
 ##- 2. ESTIMATING
 # λ : (lambda) : Spatial autoregressive parameter
 # σ² ("phi") : Random effects
 # ρ : (rho) : Spatial error component
 # ψ (psi) : Serial correlation
 
-fm<-ihs(value)~ihs(gdppc)+ihs(gdp_popop)+tradec+reso+log(dist)+bits+pol+fin+eco+lit+as.numeric(year)
-
-base <- spml(fm, data=data_exp_cty, listw=W.list.inv, model="pooling", lag=FALSE, spatial.error="none")
+base <- spml(fm, data=data_cty, listw=W.list.inv, model="pooling", lag=FALSE, spatial.error="none")
 summary(base)
 -2*base$logLik+2*length(data_exp_cty)
 
-b <- lm(fm, data=data_exp_cty)
+#####----------------------------- Base Model -----------------------------#####
+
+#base case without trend
+fm<-ihs(value)~ihs(gdppc_g)+tradec+reso+log(dist)+bits+pol+fin+eco+lit
+a <- lm(fm, data=data_cty)
+summary(a)
+
+#base case with linear trend
+fm<-ihs(value)~ihs(gdppc_g)+tradec+reso+log(dist)+bits+pol+fin+eco+lit+as.numeric(year)
+b <- lm(fm, data=data_cty)
 summary(b)
 
-# Full model including random effects ("model"), lagged dependent ("lag=TRUE") and spatial error ("spatial.error")
-sararreb <- spml(fm, data = data_exp_cty, listw=W.list.inv, model="random", lag=TRUE, spatial.error="b")
-summary(sararreb)
-#Spatial autoregressive parameter, Random effects parameter are significant
-sararrekkp <- spml(fm, data = data_exp_cty, listw=W.list.inv, model="random", lag=TRUE, spatial.error="kkp")
-summary(sararrekkp)
-#Spatial autoregressive parameter, Random effects parameter and Spatial error component are significant
-sararreb$logLik < sararrekkp$logLik
+#base case with quadratic trend
+fm<-ihs(value)~ihs(gdppc_g)+tradec+reso+log(dist)+bits+pol+fin+eco+lit+as.numeric(year)+I(as.numeric(year)^2)
+c <- lm(fm, data=data_cty)
+summary(c)
 
-##### ----- Unterschied zwischen b und kkp? Was sollen wir nehmen?
+#base case with cubed trend
+fm<-ihs(value)~ihs(gdppc_g)+tradec+reso+log(dist)+bits+pol+fin+eco+lit+as.numeric(year)+I(as.numeric(year)^2)+I(as.numeric(year)^3)
+d <- lm(fm, data=data_cty)
+summary(d)
 
+AIC(a) #1935.375
+AIC(b) #1923.019
+AIC(c) #1922.81
+AIC(d) #1924.552
 
-# Model including random effects ("model"), lagged dependent ("lag=TRUE")
-sarreb <- spml(fm, data = data_exp_cty ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="none")
-summary(sarreb)
-#Spatial autoregressive parameter, Random effects parameter are significant
-sarrekkp <- spml(fm, data = data_exp_cty ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="none")
-summary(sarrekkp)
-#Spatial autoregressive parameter, Random effects parameter are significant
-sarreb$logLik = sarrekkp$logLik
+#Choose quadtratic trend model
+fm<-ihs(value)~ihs(gdppc_g)+tradec+reso+log(dist)+bits+pol+fin+eco+lit+as.numeric(year)+I(as.numeric(year)^2)
 
 # Full model including random effects ("model"), lagged dependent ("lag=TRUE") and spatial error ("spatial.error")
-sararre <- spreml(fm, data_exp_cty ,w=W.list.inv, lag = FALSE, errors = "ols")
-summary(sararre)
-#Serial correlation and spatial autroregressive parameter are significant
+full_b <- spml(fm, data = data_cty, listw=W.list.inv, model="random", lag=TRUE, spatial.error="b")
+summary(full_b)
+# Full model including random effects ("model"), lagged dependent ("lag=TRUE") and spatial error ("spatial.error")
+full_kkp <- spml(fm, data = data_cty, listw=W.list.inv, model="random", lag=TRUE, spatial.error="kkp")
+summary(full_kkp)
+##### ----- Kein Unterschied zwischen kkp und b
 
-sarsem<-spml(fm, data_exp_cty, listw=W.list.inv, lag=TRUE, spatial.error="kkp", model="within", effect="time", method="eigen", quiet=TRUE, zero.policy=NULL, tol.solce=1e-10)
+# ML panel with iid errors
+b_serial <- spreml(fm, data_cty ,w=W.list.inv, lag = FALSE, errors = "ols")
+summary(b_serial)
+-2*b_serial$logLik+2*length(data_cty) #1970.81
 
-summary(sarsem)
-effects(sarsem)
-#countrycode um iso2 zu bekommen 
+# ML panel with spatial lag, random effects, AR(1) serial correlation, spatial error correlation
+b_all <- spreml(fm, data_cty ,w=W.list.inv, lag = TRUE, errors = "semsrre")
+summary(b_all)
+-2*b_serial$logLik+2*(length(data_cty)+4) #1978.81
 
-#mice package impotiert datensätze für natural recources verwenden # hab daweil mal igeine lösung
 
-#literacy variable bearbeiten 
+#####----------------------------- Base1 Model -----------------------------#####
+
+#base case without trend
+fm<-ihs(value)~ihs(gdppc_g)+ihs(gdppc_po_g)+tradec+reso+log(dist)+bits+pol+fin+eco+lit
+a1 <- lm(fm, data=data_cty)
+summary(a1)
+
+#base case with linear trend
+fm<-ihs(value)~ihs(gdppc_g)+ihs(gdppc_po_g)+tradec+reso+log(dist)+bits+pol+fin+eco+lit+as.numeric(year)
+b1 <- lm(fm, data=data_cty)
+summary(b1)
+
+#base case with quadratic trend
+fm<-ihs(value)~ihs(gdppc_g)+ihs(gdppc_po_g)+tradec+reso+log(dist)+bits+pol+fin+eco+lit+as.numeric(year)+I(as.numeric(year)^2)
+c1 <- lm(fm, data=data_cty)
+summary(c1)
+
+#base case with cubed trend
+fm<-ihs(value)~ihs(gdppc_g)+ihs(gdppc_po_g)+tradec+reso+log(dist)+bits+pol+fin+eco+lit+as.numeric(year)+I(as.numeric(year)^2)+I(as.numeric(year)^3)
+d1 <- lm(fm, data=data_cty)
+summary(d1)
+
+AIC(a1) #1934.53
+AIC(b1) #1924.418
+AIC(c1) #1924.36
+AIC(d1) #1926.075
+
+#Choose quadratic model
+fm<-ihs(value)~ihs(gdppc_g)+ihs(gdppc_po_g)+tradec+reso+log(dist)+bits+pol+fin+eco+lit+as.numeric(year)+I(as.numeric(year)^2)
+
+# Full model including random effects ("model"), lagged dependent ("lag=TRUE") and spatial error ("spatial.error")
+full_b1 <- spml(fm, data = data_cty, listw=W.list.inv, model="random", lag=TRUE, spatial.error="b")
+summary(full_b1)
+# Full model including random effects ("model"), lagged dependent ("lag=TRUE") and spatial error ("spatial.error")
+full_kkp1 <- spml(fm, data = data_cty, listw=W.list.inv, model="random", lag=TRUE, spatial.error="kkp")
+summary(full_kkp1)
+##### ----- Kein großer Unterschied zwischen kkp und b
+
+# ML panel with iid errors
+b1_serial <- spreml(fm, data_cty ,w=W.list.inv, lag = FALSE, errors = "ols")
+summary(b1_serial)
+-2*b1_serial$logLik+2*length(data_cty) #1970.36
+
+# ML panel with spatial lag, random effects, AR(1) serial correlation, spatial error correlation
+b1_all <- spreml(fm, data_cty ,w=W.list.inv, lag = TRUE, errors = "semsrre")
+summary(b1_all)
+-2*b1_all$logLik+2*(length(data_cty)+4) #1919.012
 
 
 @
