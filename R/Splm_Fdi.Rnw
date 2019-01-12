@@ -22,23 +22,32 @@ ihs <- function(x) {
     return(y)
 }# alternative Box cox transform
 
-subset(data_exp, select = -c(dist, bits))
-diff(subset(data_exp, select = -c(dist, bits)))
-
-lala<-pdata.frame(data_exp, c("iso2c", "year"))
-
-diff(subset(lala, select = -c(dist, bits, value)))
-
-diff(lala$year)
 
 getwd()
 setwd("..")
 
 
-data_exp<-readRDS("./data/FDI_data.rds")
+data_exp<-readRDS("./data/FDI_data_large.rds")
 W.list.inv<-readRDS("./data/W.list.inv.rds")
 W.dis<-readRDS("./data/W.dis.rds")
 
+
+# head(data_exp)
+# 
+# data_exp<-data_exp%>% group_by(iso2c) %>% mutate(population=c(NA,diff(population, differnces =1, lag =1)))
+# data_exp<-data_exp%>% group_by(iso2c) %>% mutate(gdppc=c(NA,diff(gdppc, differnces =1, lag =1)))
+# data_exp<-data_exp%>% group_by(iso2c) %>% mutate(tradec=c(NA,diff(tradec, differnces =1, lag =1)))
+# data_exp<-data_exp%>% group_by(iso2c) %>% mutate(reso=c(NA,diff(reso, differnces =1, lag =1)))
+# data_exp<-data_exp%>% group_by(iso2c) %>% mutate(GDP_po=c(NA,diff(GDP_po, differnces =1, lag =1)))
+# data_exp<-data_exp%>% group_by(iso2c) %>% mutate(pol=c(NA,diff(pol, differnces =1, lag =1)))
+# data_exp<-data_exp%>% group_by(iso2c) %>% mutate(fin=c(NA,diff(fin, differnces =1, lag =1)))
+# data_exp<-data_exp%>% group_by(iso2c) %>% mutate(eco=c(NA,diff(eco, differnces =1, lag =1)))
+# 
+# 
+# data_exp<-na.omit(data_exp)
+# 
+# fm<-ihs(value)~+gdppc+log(lit)+tradec+reso+pol+fin+bits+as.numeric(year)+I(as.numeric(year)^2)#mit diffs kommen wir daweil noch zu keinem besseren Ergebnis
+# cov(data_exp[,3:14])
 #-----------------------------------------------------Testing
 
 summary(data_exp$reso)
@@ -55,12 +64,15 @@ data_exp<-data_exp[order(match(data_exp$iso2c,rownames(W.dis)), data_exp$year),]
 
 #data_exp$iso2c<-as.factor(data_exp$iso2c)
 
+names(data_exp)[names(data_exp) %in% c("Government Stability","Socioeconomic Conditions","Investment Profile","Internal Conflict","External Conflict","Corruption","Military in Politics","Religious Tensions","Law and Order","Ethnic Tensions","Democratic Accountability","Bureaucracy Quality")] = c("Govers","Socio","Invest","InterC","ExterC","Corruption","MilitaryPo","Religious","LawandOrder","EthnicTensions","DemocraticAccountability","BureaucracyQuality")
+
+
 ##-------------------Fromula
-
-head(data_exp)
-fm<-ihs(value)~log(population)+log(gdppc*population)+pol+log(lit)#+log(tradec)+ log(reso*gdppc*population)+log(dist)+log(GDP_po)+pol+fin+eco+log(lit)+as.numeric(year)+I(as.numeric(year)^2)+bits#singular mit der gleichung, wenn ich population und gdppc raushau gehts
+data_exp$`Government Stability`
+colnames(data_exp)
+fm<-ihs(value)~log(population)+log(gdp)+log(lit)+ log(reso)+log(GDP_po)+bits+Govers+Invest+LawandOrder+DemocraticAccountability+DebtServ+ForDebt+IntLiq+Inflation+as.numeric(year)+I(as.numeric(year)^2)
 #fm<-ihs(value)~Within(log(population))+Within(log(gdppc))+tradec+reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit
-
+#fm<-ihs(value)~log(population)+log(gdp)+log(lit)+log(tradec)+ log(reso)+log(dist)+log(GDP_po)+bits+Govers+Socio+Invest+InterC+ExterC+Corruption+MilitaryPo+Religious+LawandOrder+EthnicTensions+DemocraticAccountability+BureaucracyQuality+CAXGS+DebtServ+ForDebt+IntLiq+XRStab+BudBal+CACC+Inflation+as.numeric(year)+I(as.numeric(year)^2)
 #fm<-ihs(value)~Within(log(population))+Within(log(gdppc))+Within(tradec)+Within(reso)+log(dist)+Within(log(GDP_po))+bits+Within(pol)+Within(fin)+Within(eco)+Within(lit)
 #fm<-ihs(value)~log(population)+log(gdppc)+log(tradec)+ reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit
 
@@ -101,7 +113,7 @@ summary(sararre)
 
 #sarsem<-spml(fm, data_exp, listw=W.list.inv, lag=TRUE, spatial.error="kkp", model="within", effect="time", method="eigen", quiet=TRUE, zero.policy=NULL, tol.solce=1e-10)#komplett schlecht
 
-sarsem<-spml(fm, data_exp, listw=W.list.inv,model="within", effect="twoways", lag=TRUE, spatial.error="non")
+sarsem<-spml(fm, data_exp, listw=W.list.inv,model="within", effect="time", lag=TRUE, spatial.error="non")
 
 summary(sarsem)
 time <- length(unique(data_exp$year))
@@ -185,7 +197,10 @@ reported every five years for 1960–2000? daweil nicht wichtig
 
 
 
-
+Wichtig 
+debug()
+undebug
+::: wenn eine externe funktion in einem Package (also für uns nicht verfügbar)
 
 
 To do:
