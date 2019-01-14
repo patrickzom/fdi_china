@@ -4,7 +4,7 @@
 
 https://drive.google.com/file/d/1Oe__q_SkjiQkz33lqwD4gSUQ74B5GO_T/view
 <<label=Preparation>>=
-library(WDI)
+  library(WDI)
 library(plm)
 library(tidyr)
 library(dplyr)
@@ -27,8 +27,8 @@ W.dis<-readRDS("./data/W.dis.rds")
 
 #-----------------------------------------------------Function
 ihs <- function(x) {
-    y <- log(x + sqrt(x ^ 2 + 1))
-    return(y)
+  y <- log(x + sqrt(x ^ 2 + 1))
+  return(y)
 }# alternative Box cox transform
 
 #-----------------------------------------------------Differencing all - new data set is data_exp_cty
@@ -85,32 +85,41 @@ head(data_exp_cou)
 
 
 @
-
-
-<<Estimation with data_exp_year>>=
-##- 2. ESTIMATING
-# λ : (lambda) : Spatial autoregressive parameter
-# σ² ("phi") : Random effects
-# ρ : (rho) : Spatial error component
-# ψ (psi) : Serial correlation
-
-fm<-ihs(value)~log(population)+log(gdppc)+tradex+reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit
+  
+  
+  <<Estimation with data_exp_year>>=
+  ##- 2. ESTIMATING
+  # λ : (lambda) : Spatial autoregressive parameter
+  # σ² ("phi") : Random effects
+  # ρ : (rho) : Spatial error component
+  # ψ (psi) : Serial correlation
+  
+  fm<-ihs(value)~log(population)+log(gdppc)+tradec+reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit
 
 base <- spml(fm, data=data_exp_year, listw=W.list.inv, model="pooling", lag=FALSE, spatial.error="none")
 summary(base)
+
 -2*base$logLik+2*length(data_exp_year)
 
 
 # Full model including random effects ("model"), lagged dependent ("lag=TRUE") and spatial error ("spatial.error")
 sararreb <- spml(fm, data = data_exp_year, listw=W.list.inv, model="random", lag=TRUE, spatial.error="b")
 summary(sararreb)
+
 #Spatial autoregressive parameter, Random effects parameter are significant
+
 sararrekkp <- spml(fm, data = data_exp_year ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="kkp")
 summary(sararrekkp)
+
 #Spatial autoregressive parameter, Random effects parameter and Spatial error component are significant
 sararreb$logLik < sararrekkp$logLik
 
 ##### ----- Unterschied zwischen b und kkp? Was sollen wir nehmen?
+#difference in variance matrix
+#b= harder variance matrix
+
+#kkp= error follows first order sar process, based on simpler variance matrix
+
 
 
 # Model including random effects ("model"), lagged dependent ("lag=TRUE")
@@ -138,17 +147,17 @@ effects(sarsem)
 #literacy variable bearbeiten 
 
 @
-
-
-Testing stacked by year
+  
+  
+  Testing stacked by year
 
 <<Testing with data_exp_year>>=
-#Locally robust panel Lagrange Multiplier tests for spatial dependence
-#Should we use spatial lag or spatial error model or both?
-#Assumption: pooling assumption, i.e. they do not allow for any kind of individual effect
-
-#Test for spatial error
-slmtest(fm,data = data_exp_year ,listw=W.list.inv, test="lme")
+  #Locally robust panel Lagrange Multiplier tests for spatial dependence
+  #Should we use spatial lag or spatial error model or both?
+  #Assumption: pooling assumption, i.e. they do not allow for any kind of individual effect
+  
+  #Test for spatial error
+  slmtest(fm,data = data_exp_year ,listw=W.list.inv, test="lme")
 #Result: LM = 2.5249, df = 1, p-value = 0.1121 -> no spatial error dependence
 
 #Test for spatial lag
@@ -188,36 +197,36 @@ bsjktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="C.3") # p-value = 1
 
 ##### ----- What should we estimate now?
 @
-
-
-<<ggplot with data_exp_year>>=
-ggplot(data_exp_year, aes(x=year, y=reso, group=iso2c, colour=iso2c))+
+  
+  
+  <<ggplot with data_exp_year>>=
+  ggplot(data_exp_year, aes(x=year, y=reso, group=iso2c, colour=iso2c))+
   geom_line()+
   geom_point()+
   scale_x_continuous(breaks=data_exp_year$year)+
   labs(x="Year", y="X")+
   theme_minimal()
 @
-Trend: GDP_po; population; gdppc (nur leicht); pol, fin, eco (unterschiedliche Trends), 
+  Trend: GDP_po; population; gdppc (nur leicht); pol, fin, eco (unterschiedliche Trends), 
 
 
 <<ggplot with data_exp_cty>>=
-ggplot(data_cty, aes(x=as.numeric(year), y=gdppc_po, group=iso2c, colour=iso2c))+
+  ggplot(data_cty, aes(x=as.numeric(year), y=gdppc_po, group=iso2c, colour=iso2c))+
   geom_line()+
   geom_point()+
   scale_x_continuous(breaks=as.numeric(data_cty$year))+
   labs(x="Year", y="X")+
   theme_minimal()
 @
-
-
-Testing with stationary data
+  
+  
+  Testing with stationary data
 
 Problem: logs nicht möglich für GDP, Population, gdppc, GDP_po, gpd_popop und ihs nicht möglich für gdp, GDP_po
 Alternative: nur gdppc und gdp_popop
 
 <<Testing with data_cty>>=
-fm<-ihs(value)~ihs(gdppc)+ihs(gdppc_po)+tradec+reso+log(dist)+bits+pol+fin+eco+lit+as.numeric(year)+I(as.numeric(year)^2)
+  fm<-ihs(value)~ihs(gdppc)+ihs(gdppc_po)+tradec+reso+log(dist)+bits+pol+fin+eco+lit+as.numeric(year)+I(as.numeric(year)^2)
 
 #Locally robust panel Lagrange Multiplier tests for spatial dependence
 #Should we use spatial lag or spatial error model or both?
@@ -262,16 +271,16 @@ bsjktest(x=fm, data = data_cty ,listw=W.list.inv, test="C.1") # p-value = 0.4748
 bsjktest(x=fm, data = data_cty ,listw=W.list.inv, test="C.2") # p-value = 9.081e-05 -> serial corr. in error terms, sub RE and spatial dependence
 bsjktest(x=fm, data = data_cty ,listw=W.list.inv, test="C.3") # p-value = 1 -> no random effects, sub serial corr. and spatial dependence in error terms
 @
-
-
-<<Estimation with data_cty>>=
-##- 2. ESTIMATING
-# λ : (lambda) : Spatial autoregressive parameter
-# σ² ("phi") : Random effects
-# ρ : (rho) : Spatial error component
-# ψ (psi) : Serial correlation
-
-base <- spml(fm, data=data_cty, listw=W.list.inv, model="pooling", lag=FALSE, spatial.error="none")
+  
+  
+  <<Estimation with data_cty>>=
+  ##- 2. ESTIMATING
+  # λ : (lambda) : Spatial autoregressive parameter
+  # σ² ("phi") : Random effects
+  # ρ : (rho) : Spatial error component
+  # ψ (psi) : Serial correlation
+  
+  base <- spml(fm, data=data_cty, listw=W.list.inv, model="pooling", lag=FALSE, spatial.error="none")
 summary(base)
 -2*base$logLik+2*length(data_exp_cty)
 
@@ -374,7 +383,7 @@ summary(b1_all)
 
 
 @
-
-
-
-\end{document}
+  
+  
+  
+  \end{document}
