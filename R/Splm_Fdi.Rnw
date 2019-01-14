@@ -26,7 +26,6 @@ ihs <- function(x) {
 getwd()
 setwd("..")
 
-
 data_exp<-readRDS("./data/FDI_data_large.rds")
 W.list.inv<-readRDS("./data/W.list.inv.rds")
 W.dis<-readRDS("./data/W.dis.rds")
