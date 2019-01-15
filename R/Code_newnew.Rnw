@@ -179,7 +179,6 @@ shp <- shp[shp$NAME_ENGL %in% africa, ]
 
 All other data:
 <<>>=
-
 #------------------------------------------------read in political data
 
 
