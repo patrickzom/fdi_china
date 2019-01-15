@@ -16,6 +16,8 @@ library(data.table)
 library(mice)
 library(splm)
 library(plm)
+library(tseries)
+library(gdata)
 
 ihs <- function(x) {
     y <- log(x + sqrt(x ^ 2 + 1))
@@ -31,49 +33,64 @@ W.list.inv<-readRDS("./data/W.list.inv.rds")
 W.dis<-readRDS("./data/W.dis.rds")
 
 
-# head(data_exp)
-# 
-# data_exp<-data_exp%>% group_by(iso2c) %>% mutate(population=c(NA,diff(population, differnces =1, lag =1)))
-# data_exp<-data_exp%>% group_by(iso2c) %>% mutate(gdppc=c(NA,diff(gdppc, differnces =1, lag =1)))
-# data_exp<-data_exp%>% group_by(iso2c) %>% mutate(tradec=c(NA,diff(tradec, differnces =1, lag =1)))
-# data_exp<-data_exp%>% group_by(iso2c) %>% mutate(reso=c(NA,diff(reso, differnces =1, lag =1)))
-# data_exp<-data_exp%>% group_by(iso2c) %>% mutate(GDP_po=c(NA,diff(GDP_po, differnces =1, lag =1)))
-# data_exp<-data_exp%>% group_by(iso2c) %>% mutate(pol=c(NA,diff(pol, differnces =1, lag =1)))
-# data_exp<-data_exp%>% group_by(iso2c) %>% mutate(fin=c(NA,diff(fin, differnces =1, lag =1)))
-# data_exp<-data_exp%>% group_by(iso2c) %>% mutate(eco=c(NA,diff(eco, differnces =1, lag =1)))
-# 
-# 
-# data_exp<-na.omit(data_exp)
-# 
-# fm<-ihs(value)~+gdppc+log(lit)+tradec+reso+pol+fin+bits+as.numeric(year)+I(as.numeric(year)^2)#mit diffs kommen wir daweil noch zu keinem besseren Ergebnis
+
+names(data_exp)[names(data_exp) %in% c("Government Stability","Socioeconomic Conditions","Investment Profile","Internal Conflict","External Conflict","Corruption","Military in Politics","Religious Tensions","Law and Order","Ethnic Tensions","Democratic Accountability","Bureaucracy Quality")] = c("Govers","Socio","Invest","InterC","ExterC","Corruption","MilitaryPo","Religious","LawandOrder","EthnicTensions","DemocraticAccountability","BureaucracyQuality")
+
+#--------------------------------------------sum up pol, fin und eco
+
+attach(data_exp)
+
+data_exp$pol<-Govers+Socio+Invest+InterC+ExterC+Corruption+MilitaryPo+Religious+LawandOrder+EthnicTensions+DemocraticAccountability+BureaucracyQuality
+
+data_exp$fin<-CAXGS+DebtServ+ForDebt+IntLiq+XRStab
+
+data_exp$eco<-BudBal+CACC+Inflation
+
+detach(data_exp)
+
+#----------------------------------------------take first difference------------------------------------
+
+data_exp<-pdata.frame(data_exp)
+
+data.p <- data_exp %>%
+  subset(select= c(iso2c, year, population, gdp,GDP_po)) %>%
+  rename.vars(from=c("population", "gdp", "GDP_po"), to=c("pop_g", "gdp_g", "GDP_po_g"))
+  
+
+for(i in 3:ncol(data.p)){
+  data.p[,i] <- diff(data.p[,i])
+}
+
+data_cty <- data_exp %>%
+  left_join(data.p, by=c("iso2c", "year")) %>%
+  na.omit()
+
+remove(data.p)
+
+
+# fm<-value~+gdp+log(lit)+bits#mit diffs kommen wir daweil noch zu keinem besseren Ergebnis
 # cov(data_exp[,3:14])
-#-----------------------------------------------------Testing
+#-----------------------------------------------------Stacking------------------------------------------------------------------
 
 summary(data_exp$reso)
-
-anyNA(data_exp)
-
-
-rownames(W.dis)
 
 
 #stack it how we want it 
 data_exp<-data_exp[order(data_exp$year,match(data_exp$iso2c,rownames(W.dis))),]#stack by year first
 data_exp<-data_exp[order(match(data_exp$iso2c,rownames(W.dis)), data_exp$year),]#stack by Country first
 
-#data_exp$iso2c<-as.factor(data_exp$iso2c)
-
-names(data_exp)[names(data_exp) %in% c("Government Stability","Socioeconomic Conditions","Investment Profile","Internal Conflict","External Conflict","Corruption","Military in Politics","Religious Tensions","Law and Order","Ethnic Tensions","Democratic Accountability","Bureaucracy Quality")] = c("Govers","Socio","Invest","InterC","ExterC","Corruption","MilitaryPo","Religious","LawandOrder","EthnicTensions","DemocraticAccountability","BureaucracyQuality")
 
 
-##-------------------Fromula
-data_exp$`Government Stability`
+##------------------------------------------------------------------------------------------------------------------------------
+##----------------------------------------------------Testing-------------------------------------------------------------------
+##------------------------------------------------------------------------------------------------------------------------------
+
 colnames(data_exp)
-fm<-ihs(value)~log(population)+log(gdp)+log(lit)+ log(reso)+log(GDP_po)+bits+Govers+Invest+LawandOrder+DemocraticAccountability+DebtServ+ForDebt+IntLiq+Inflation+as.numeric(year)+I(as.numeric(year)^2)
+fm<-ihs(value)~log(population)+log(gdp)+log(lit)+ log(reso)+log(GDP_po)+bits+Govers+Invest+LawandOrder+DemocraticAccountability+DebtServ+ForDebt+IntLiq+Inflation+year#as.numeric(year)+I(as.numeric(year)^2)
 #fm<-ihs(value)~Within(log(population))+Within(log(gdppc))+tradec+reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit
 #fm<-ihs(value)~log(population)+log(gdp)+log(lit)+log(tradec)+ log(reso)+log(dist)+log(GDP_po)+bits+Govers+Socio+Invest+InterC+ExterC+Corruption+MilitaryPo+Religious+LawandOrder+EthnicTensions+DemocraticAccountability+BureaucracyQuality+CAXGS+DebtServ+ForDebt+IntLiq+XRStab+BudBal+CACC+Inflation+as.numeric(year)+I(as.numeric(year)^2)
 #fm<-ihs(value)~Within(log(population))+Within(log(gdppc))+Within(tradec)+Within(reso)+log(dist)+Within(log(GDP_po))+bits+Within(pol)+Within(fin)+Within(eco)+Within(lit)
-#fm<-ihs(value)~log(population)+log(gdppc)+log(tradec)+ reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit
+#fm<-ihs(value)~log(population)+log(gdp)+log(tradec)+ reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit+year
 
 
 
@@ -126,19 +143,51 @@ impacts(sararre, listw = W.list.inv, time = time)
 
 #---------------------------------------------estimate plm Model as in the paper without lit and gdp_po
 
-plmfm<-ihs(value)~log(population)+log(gdppc)+log(tradec)+ log(reso)+log(dist)+bits+log(pol)+log(fin)+log(eco)
+plmfm<-ihs(value)~log(population)+log(gdppc)+log(tradec)+ log(reso)+log(dist)+bits+pol+fin+eco
 
 plm<-plm(plmfm, data_exp, model = "random")
 summary(plm)
 
 
-#---------------------------------------------estimate it without panel data framework
-
-Durbin <- lagsarlm(formula = fm, listw = W.list.inv, type="mixed", data=data_exp, tol.solve=1.0e-30)
-summary(Durbin, correlation=FALSE)
 
 
 
+
+
+##---------------------------------------------------without zero countries---------------------------------------------------
+data_exp1<-filter(data_exp, iso2c != "BF")
+data_exp1<-filter(data_exp1, iso2c != "GM")
+
+shp <- readOGR(dsn = "./data/Eurostat_RG_2016_4326_M01", layer ="CNTR_RG_01M_2016_4326", encoding = "UTF-8")
+
+shp <- shp[shp$CNTR_ID %in% data_exp1$iso2c, ]
+
+
+coords <-coordinates(shp)
+distw.tot <- dnearneigh(coords,0,Inf, row.names = shp$CNTR_ID)
+dnbdist.tot <- nbdists(distw.tot, coords)
+gl.tot <- lapply(dnbdist.tot, function(x) 1.345756/x^2) #calculating inverse distances and take x^2 because we want to put more weight on closer neighbours
+W.list.inv <- nb2listw(distw.tot, glist=gl.tot, zero.policy=FALSE, style = "W")
+W.dis<-listw2mat(W.list.inv)
+
+
+
+slmer <- slmtest(fm,data = data_exp1 ,listw=W.list.inv, test="lme")
+slmer
+slmlag<- slmtest(fm,data = data_exp1 ,listw=W.list.inv, test="lml")
+slmlag
+
+
+
+bsktest(x=fm, data = data_exp1 ,listw=W.list.inv, test="LM1")
+bsktest(x=fm, data = data_exp1 ,listw=W.list.inv, test="CLMmu")
+bsktest(x=fm, data = data_exp1 ,listw=W.list.inv, test="CLMlambda")
+
+bsjktest(x=fm, data = data_exp1 ,listw=W.list.inv, test="C.2")
+bsjktest(x=fm, data = data_exp1 ,listw=W.list.inv, test="C.3")
+
+sararre <- spreml(fm, data_exp1 ,w=W.list.inv, lag = TRUE, errors = "sr")
+summary(sararre)
 
 
 
@@ -207,6 +256,14 @@ To do:
 -Reso ohne GDP 
 -Indices können einzeln reingegeben werden
 -fixed effects sichere Seit-> within ->oder time fixed effect
--differnces schätzen
+-differnces schätzen, stationarität schauen und adf.test for panels
 -base plm mit Spatial vergleichen
+-Lybien raus geben, ohne Lybien gleich viel bessere Ergebnisse 
+
+
+
+Problems we have run into:
+
+the variables had not always that impact we would have expected, that´s why we had a more detailed look what determines chinese FDI´s in difference to normal FDI´s to look for which there is a theoretical reason and for which not. 
+
 \end{document}
