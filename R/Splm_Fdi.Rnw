@@ -90,7 +90,7 @@ fm<-ihs(value)~log(population)+log(gdp)+log(lit)+ log(reso)+log(GDP_po)+bits+Gov
 #fm<-ihs(value)~Within(log(population))+Within(log(gdppc))+tradec+reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit
 #fm<-ihs(value)~log(population)+log(gdp)+log(lit)+log(tradec)+ log(reso)+log(dist)+log(GDP_po)+bits+Govers+Socio+Invest+InterC+ExterC+Corruption+MilitaryPo+Religious+LawandOrder+EthnicTensions+DemocraticAccountability+BureaucracyQuality+CAXGS+DebtServ+ForDebt+IntLiq+XRStab+BudBal+CACC+Inflation+as.numeric(year)+I(as.numeric(year)^2)
 #fm<-ihs(value)~Within(log(population))+Within(log(gdppc))+Within(tradec)+Within(reso)+log(dist)+Within(log(GDP_po))+bits+Within(pol)+Within(fin)+Within(eco)+Within(lit)
-#fm<-ihs(value)~log(population)+log(gdp)+log(tradec)+ reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit+year
+#fm<-ihs(value)~log(population)+log(gdp)+log(tradec)+ reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit
 
 
 
@@ -225,6 +225,26 @@ W.list.queen<-mat2listw(W.queen, style = "W")
 W.list.inv<-W.list.queen
 W.dis<-W.queen
 @
+
+
+Plots
+<<>>=
+
+year15<-filter(data_exp, year=="2015")
+year15<-subset(year15, select = c("iso2c","value"))
+
+shp <- merge(shp, year15, all.x = FALSE, all.y = TRUE, by.x = "CNTR_ID", by.y = "iso2c")  
+
+#nice polt
+shades <- auto.shading(shp$value)
+choropleth(shp, shp$value, shades)#looks like more spatial dependencies than MI shows
+choro.legend(55.98108,13.93117,  sh=shades, title="FDI Inflows from China 2015", cex = 0.5)
+north.arrow(55.98108,30.13448, 1, col="red")
+@
+
+
+
+
 Fragen:
 
 -in welche Richtung sollen wir unsere Arbeit entwickeln? schätzen mit pooeld und time fixed effects, schauen ob serrial correlation ein Problem ist. Verschiedene Model von den Variablen her, Daten anschauen, Pol und co aufteilen aber nicht zu stark
@@ -264,6 +284,7 @@ To do:
 
 Problems we have run into:
 
-the variables had not always that impact we would have expected, that´s why we had a more detailed look what determines chinese FDI´s in difference to normal FDI´s to look for which there is a theoretical reason and for which not. 
-
+-the variables had not always that impact we would have expected, that´s why we had a more detailed look what determines chinese FDI´s in difference to normal FDI´s to look for which there is a theoretical reason and for which not. 
+-Serial Correlation
+-Non-Staionarity
 \end{document}
