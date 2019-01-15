@@ -15,7 +15,6 @@ library(countrycode)
 library(data.table)
 library(mice)
 library(splm)
-
 @
 
 Haben wir:
@@ -206,6 +205,7 @@ remove(POL)
 remove(pol)
 
 #start ordering
+ind<-filter(ind, iso2c!="LY")#to get Libya out
 
 x<-levels(as.factor(ind$iso2c))
 shp <- shp[shp$CNTR_ID %in% x, ]
@@ -217,7 +217,7 @@ ind<-ind %>% spread(.id, pol)
 
 ind<-ind[order(ind$year,match(ind$iso2c,x)),]#for ordering ind in the same way as our weights matrix
 
-sum(1:455==which(ind$iso2c==x))
+sum(1:442==which(ind$iso2c==x))
 
 #------------------------------------------------read in financial risk data-----------------
 
@@ -315,7 +315,7 @@ data_WDI$tradec<-1/data_WDI$tradec*100#too calculate the trade costs
 #order Wdi data as our shapefile
 data_WDI<-data_WDI[order(data_WDI$year,match(data_WDI$iso2c,x)),]
 
-sum(1:455==which(data_WDI$iso2c==x))# gleiche reihenfolge wie shapefile
+sum(1:442==which(data_WDI$iso2c==x))# gleiche reihenfolge wie shapefile
 
 remove(trade)
 remove(eth)
@@ -333,27 +333,28 @@ sum(is.na(reso))#in libya fehlen die letzten vier Jahre, wegen Bürgerkrieg
 #auch werte für 2012, 2013 auf https://tradingeconomics.com/libya/total-natural-resources-rents-percent-of-gdp-wb-data.html
 #2013#42
 #2012#59
-
-reso$NY.GDP.TOTL.RT.ZS
-libya<-reso[209:221,]
-libya<-libya[order(libya$year),]
-libya[10,3]<-59
-libya[11,3]<-42
-
-libya1<-predict(arima(libya$NY.GDP.TOTL.RT.ZS,order=c(1,1,0)), n.ahead=2 )$`pred`#einfach mit AR
-libya[12:13,3]<-libya1
-libya<-libya[order(-libya$year),]
-
-reso[209:221,"NY.GDP.TOTL.RT.ZS"]<-libya$NY.GDP.TOTL.RT.ZS
-
+# 
+# reso$NY.GDP.TOTL.RT.ZS
+# libya<-reso[209:221,]
+# libya<-libya[order(libya$year),]
+# libya[10,3]<-59
+# libya[11,3]<-42
+# 
+# libya1<-predict(arima(libya$NY.GDP.TOTL.RT.ZS,order=c(1,1,0)), n.ahead=2 )$`pred`#einfach mit AR
+# libya[12:13,3]<-libya1
+# libya<-libya[order(-libya$year),]
+# 
+# reso[209:221,"NY.GDP.TOTL.RT.ZS"]<-libya$NY.GDP.TOTL.RT.ZS
+# 
 data_WDI<-left_join(data_WDI,reso, by=c("iso2c","country", "year"))
-
+ 
 names(data_WDI)[names(data_WDI) %in% c("NY.GDP.TOTL.RT.ZS")] = c("reso")
-
-
-remove(libya1)
+# 
+# 
+# remove(libya1)
+# remove(libya)
 remove(reso)
-remove(libya)
+
 
 
 #-------------------------------------------distance china host country-----------------------------------
@@ -404,7 +405,7 @@ gdp1<-gdp%>%spread(year, NY.GDP.MKTP.KD)
 gdp1<-gdp1[order(match(gdp1[,1],rownames(W.dis))),]
 
 #check if gdp1 and W.dis have same order
-sum(1:455==which(rownames(W.dis)==gdp1$iso2c))
+sum(1:34==which(rownames(W.dis)==gdp1$iso2c))
 
 
 
@@ -484,7 +485,7 @@ litt<-as.data.frame(litt)
 
 data_exp<-subset(data_exp,select=-c(lit))
 
-litt$year<-as.numeric(rep.int(2003:2015,35))
+litt$year<-as.numeric(rep.int(2003:2015,34))# auch ändern wenn Lybien raus
 data_exp<-left_join(data_exp, litt, by=c("iso2c", "year"))
 
 #geht wsl nur mit matrix
@@ -540,9 +541,9 @@ data_exp<-data_exp[order(data_exp$year,match(data_exp$iso2c,rownames(W.dis))),]
 data_exp<-data_exp[order(match(data_exp$iso2c,x), data_exp$year),]
 
 
-#saveRDS(data_exp, "FDI_data_large.rds")
-#saveRDS(W.list.inv, "W.list.inv.rds")
-#saveRDS(W.dis, "W.dis.rds")
+# saveRDS(data_exp, "FDI_data_large.rds")
+# saveRDS(W.list.inv, "W.list.inv.rds")
+# saveRDS(W.dis, "W.dis.rds")
 #la grange multiplier test
 
 #no log for discrete variables, so variables which are between 0 and 100. 
