@@ -195,27 +195,14 @@ POL <- POL[POL$iso2c %in% x, ]
 
 POL<-POL[,-(3:21)]#keine NAs in pol
 
+A<-gather(POL,"year", "pol",3:15)
+A<-A%>%group_by(Country, iso2c, year)%>%summarise(pol=sum(pol))#calculate sum of all political risk variables
+
 ind<-gather(POL,"year", "pol",3:15)
-ind<-ind%>%group_by(Country, iso2c, year)%>%summarise(pol=sum(pol))#calculate sum of all political risk variables
-
-#Create a data frame that consists of all the 
-A <- POL %>% filter(.id=="A-Government Stability") %>% gather("year", "GovStab", 3:15) %>% mutate(id=paste(iso2c, year, sep="-")) %>% transmute(Country, iso2c, year, id, GovStab)
-B <- POL %>% filter(.id=="B-Socioeconomic Conditions") %>% gather("year", "Socio", 3:15) %>% mutate(id=paste(iso2c, year, sep="-")) %>% transmute(id, Socio)
-C <- POL %>% filter(.id=="C-Investment Profile") %>% gather("year", "InvProf", 3:15) %>% mutate(id=paste(iso2c, year, sep="-")) %>% transmute(id, InvProf)
-D<- POL %>% filter(.id=="D-Internal Conflict") %>% gather("year", "IntConf", 3:15) %>% mutate(id=paste(iso2c, year, sep="-")) %>% transmute(id, IntConf)
-E<- POL %>% filter(.id=="E-External Conflict") %>% gather("year", "ExtConf", 3:15) %>% mutate(id=paste(iso2c, year, sep="-")) %>% transmute(id, ExtConf)
-G<- POL %>% filter(.id=="F-Corruption") %>% gather("year", "Corrup", 3:15) %>% mutate(id=paste(iso2c, year, sep="-")) %>% transmute(id, Corrup)
-H<- POL %>% filter(.id=="G-Military in Politics") %>% gather("year", "Milit", 3:15) %>% mutate(id=paste(iso2c, year, sep="-")) %>% transmute(id, Milit)
-I<- POL %>% filter(.id=="H-Religious Tensions") %>% gather("year", "Reli", 3:15) %>% mutate(id=paste(iso2c, year, sep="-")) %>% transmute(id, Reli)
-J<- POL %>% filter(.id=="J-Ethnic Tensions") %>% gather("year", "Ethnic", 3:15) %>% mutate(id=paste(iso2c, year, sep="-")) %>% transmute(id, Ethnic)
-K<- POL %>% filter(.id=="K-Democratic Accountability") %>% gather("year", "Democ", 3:15) %>% mutate(id=paste(iso2c, year, sep="-")) %>% transmute(id, Democ)
-L<- POL %>% filter(.id=="L-Bureaucracy Quality") %>% gather("year", "Bureau", 3:15) %>% mutate(id=paste(iso2c, year, sep="-")) %>% transmute(id, Bureau)
-A <- A %>% left_join(B, by="id") %>% left_join(C, by="id") %>% left_join(D, by="id") %>% left_join(E, by="id") %>% left_join(G, by="id") %>% left_join(H, by="id") %>% left_join(I, by="id") %>% left_join(J, by="id") %>% left_join(K, by="id") %>% left_join(L, by="id")
-
-remove(POL, pol)
-remove(B, C, D, E, G, H, I, J, K, L)
+ind<-ind%>%group_by(.id, Country, iso2c, year)%>%summarise(pol=sum(pol))#calculate sum of all political risk variables
 
 #start ordering
+ind<-filter(ind, iso2c!="LY")#to get Libya out
 
 x<-levels(as.factor(ind$iso2c))
 shp <- shp[shp$CNTR_ID %in% x, ]
@@ -224,44 +211,41 @@ x<-shp@data
 x<-as.character(x$CNTR_ID)
 
 
+ind <-ind %>% spread(.id, pol)
 ind<-ind[order(ind$year,match(ind$iso2c,x)),]#for ordering ind in the same way as our weights matrix
-A<- A[order(A$year,match(ind$iso2c,x)),]#for ordering A in the same way as our weights matrix
 
-sum(1:455==which(ind$iso2c==x))
+sum(1:442==which(ind$iso2c==x))
+
+A<- A[order(A$year,match(A$iso2c,x)),]#for ordering A in the same way as our weights matrix
+
+remove(POL, pol)
+
 
 #------------------------------------------------read in financial risk data-----------------
-
-
 fin<-full_excel_read("./data/4BDataset2018.xls", v=FALSE, skip = 6)
 fin<-fin[c(2:6)]
 FIN <- rbindlist(fin, idcol = TRUE)
-
 
 FIN$iso2c<-countrycode(FIN$Country, "country.name", "iso2c")
 FIN <- FIN[FIN$iso2c %in% x, ]
 
 FIN<-FIN[,-(3:21)]#keine NAs in Fin
 
+B<-gather(FIN,"year", "fin",3:15)
+B<-B%>%group_by(Country, year)%>%summarise(fin=sum(fin))
+
 fin<-gather(FIN,"year", "fin",3:15)
-fin<-fin%>%group_by(Country, year)%>%summarise(fin=sum(fin))
+fin<-fin%>%group_by(.id, Country, year)%>%summarise(fin=sum(fin))
 
-B <- FIN %>% filter(.id=="ForDebt") %>% gather("year", "ForDebt", 3:15) %>% mutate(id=paste(iso2c, year, sep="-")) %>% transmute(id, ForDebt)
-C <- FIN %>% filter(.id=="XRStab") %>% gather("year", "XRStab", 3:15) %>% mutate(id=paste(iso2c, year, sep="-")) %>% transmute(id, XRStab)
-D <- FIN %>% filter(.id=="DebtServ") %>% gather("year", "DebtServ", 3:15) %>% mutate(id=paste(iso2c, year, sep="-")) %>% transmute(id, DebtServ)
-E <- FIN %>% filter(.id=="CAXGS") %>% gather("year", "CAXGS", 3:15) %>% mutate(id=paste(iso2c, year, sep="-")) %>% transmute(id, CAXGS)
-G <- FIN %>% filter(.id=="IntLiq") %>% gather("year", "IntLiq", 3:15) %>% mutate(id=paste(iso2c, year, sep="-")) %>% transmute(id, IntLiq)
-B <- B %>% left_join(C, by="id") %>% left_join(D, by="id") %>% left_join(E, by="id") %>% left_join(G, by="id")
-
+fin<-fin %>% spread(.id, fin) #Split Variables
 
 ind<-left_join(ind,fin, by=c("Country", "year"))#keine NAs
-indices <- left_join(A,B, by="id")
+indices <- left_join(A,B, by=c("Country", "year"))
 
 remove(FIN, fin)
-remove(A,B,C,D,E,G)
+
 
 #------------------------------------------------read in economic risk data----------------
-
-
 eco<-full_excel_read("./data/5BDataset2018.xls", v=FALSE, skip = 6)
 eco<-eco[c(2:6)]
 ECO <- rbindlist(eco, idcol = TRUE)
@@ -271,24 +255,20 @@ ECO <- ECO[ECO$iso2c %in% x, ]
 
 ECO<-ECO[,-(3:21)]#keine NAS
 
-A <- ECO %>% filter(.id=="CACC") %>% gather("year", "CACC", 3:15) %>% transmute(year, Country, CACC)
-B <- ECO %>% filter(.id=="BudBal") %>% gather("year", "BudBal", 3:15) %>% transmute(year, Country, BudBal)
-C <- ECO %>% filter(.id=="GDPGrowth") %>% gather("year", "GDPGrowth", 3:15) %>% transmute(year, Country, GDPGrowth)
-D <- ECO %>% filter(.id=="GDPHead") %>% gather("year", "GDPHead", 3:15) %>% transmute(year, Country, GDPHead)
-E <- ECO %>% filter(.id=="Inflation") %>% gather("year", "Inflation", 3:15) %>% transmute(year, Country, Inflation)
-A <- A %>% left_join(B, by=c("year", "Country")) %>% left_join(C, by=c("year", "Country")) %>% left_join(D, by=c("year", "Country")) %>% left_join(E, by=c("year", "Country"))
+C<-gather(ECO,"year", "eco",3:15)
+C<-C%>%group_by(Country, year)%>%summarise(eco=sum(eco))
 
 eco<-gather(ECO,"year", "eco",3:15)
-eco<-eco%>%group_by(Country, year)%>%summarise(eco=sum(eco))
+eco<-eco%>%group_by(.id, Country, year)%>%summarise(eco=sum(eco))
+
+eco<-eco %>% spread(.id, eco)
 
 ind<-left_join(ind,eco, by=c("Country", "year"))#keine NAs
-indices <- left_join(indices,A, by=c("Country", "year"))
+indices <- left_join(indices,C, by=c("Country", "year"))
 
 anyNA(ind)
-anyNA(indices)
 remove(ECO, eco)
-remove(A,B,C,D,E)
-
+remove(A,B,C)
 
 ###-------------------------------------------WDI DATA----------------------------------------------------
 ###------------------------------------------------------------------------------------------------------
@@ -344,7 +324,7 @@ remove(eth)
 remove(z)
 #-------------------------------------------#Total natural resources rents (% of GDP-----------------------------------
 
-reso<-WDI(country = "all", indicator = c("NY.GDP.TOTL.RT.ZS"), start=2003, end=2015)#Total natural resources rents (% of GDP
+reso<-WDI(country = "all", indicator = c("NY.GDP.TOTL.RT.ZS"), start=2003, end=2015)#Total natural resources rents (% of GDP)
 
 reso <- reso[reso$iso2c %in% x, ]
 
@@ -355,27 +335,27 @@ sum(is.na(reso))#in libya fehlen die letzten vier Jahre, wegen Bürgerkrieg
 #auch werte für 2012, 2013 auf https://tradingeconomics.com/libya/total-natural-resources-rents-percent-of-gdp-wb-data.html
 #2013#42
 #2012#59
-
-reso$NY.GDP.TOTL.RT.ZS
-libya<-reso[209:221,]
-libya<-libya[order(libya$year),]
-libya[10,3]<-59
-libya[11,3]<-42
-
-libya1<-predict(arima(libya$NY.GDP.TOTL.RT.ZS,order=c(1,1,0)), n.ahead=2 )$`pred`#einfach mit AR
-libya[12:13,3]<-libya1
-libya<-libya[order(-libya$year),]
-
-reso[209:221,"NY.GDP.TOTL.RT.ZS"]<-libya$NY.GDP.TOTL.RT.ZS
+#
+#reso$NY.GDP.TOTL.RT.ZS
+#libya<-reso[209:221,]
+#libya<-libya[order(libya$year),]
+#libya[10,3]<-59
+#libya[11,3]<-42
+#
+#libya1<-predict(arima(libya$NY.GDP.TOTL.RT.ZS,order=c(1,1,0)), n.ahead=2 )$`pred`#einfach mit AR
+#libya[12:13,3]<-libya1
+#libya<-libya[order(-libya$year),]
+#
+#reso[209:221,"NY.GDP.TOTL.RT.ZS"]<-libya$NY.GDP.TOTL.RT.ZS
 
 data_WDI<-left_join(data_WDI,reso, by=c("iso2c","country", "year"))
 
 names(data_WDI)[names(data_WDI) %in% c("NY.GDP.TOTL.RT.ZS")] = c("reso")
 
 
-remove(libya1)
+#remove(libya1)
 remove(reso)
-remove(libya)
+#remove(libya)
 
 
 #-------------------------------------------distance china host country-----------------------------------
@@ -394,8 +374,6 @@ dist<-data.frame(x,dist)
 
 
 data_WDI<-left_join(data_WDI,dist, by=c("iso2c"="x"))
-
-
 
 remove(china)
 remove(ch)
@@ -426,7 +404,7 @@ gdp1<-gdp%>%spread(year, NY.GDP.MKTP.KD)
 gdp1<-gdp1[order(match(gdp1[,1],rownames(W.dis))),]
 
 #check if gdp1 and W.dis have same order
-sum(1:455==which(rownames(W.dis)==gdp1$iso2c))
+sum(1:34==which(rownames(W.dis)==gdp1$iso2c))
 
 
 #use GDP per capita
@@ -439,7 +417,7 @@ gdppc1<-gdppc%>%spread(year, NY.GDP.PCAP.PP.KD)
 gdppc1<-gdppc1[order(match(gdppc1[,1],rownames(W.dis))),]
 
 #check if gdpp1 and W.dis have same order
-sum(1:455==which(rownames(W.dis)==gdp1$iso2c))
+sum(1:34==which(rownames(W.dis)==gdp1$iso2c))
 
 
 #-----------calculate potential GDP
@@ -481,6 +459,7 @@ remove(chinatable)
 
 
 @
+
 
 
 
@@ -528,12 +507,12 @@ litt<-as.data.frame(litt)
 
 data_exp<-subset(data_exp,select=-c(lit))
 
-litt$year<-as.numeric(rep.int(2003:2015,35))
+litt$year<-as.numeric(rep.int(2003:2015,34))
 litt$year <- as.factor(litt$year)
 data_exp<-left_join(data_exp, litt, by=c("iso2c", "year"))
 
 
-#####----------------- FDI Data
+#####----------------- join FDI Data
 data2<-readxl::read_xlsx("./data/FDI_China_Outflows_africa_2015_unctad.xlsx", sheet = 2)
 data<-gather(data2,"country", "value",2:57)
 data$country<-countrycode(data$country, "country.name", "iso2c")
@@ -543,11 +522,18 @@ data<-pdata.frame(data, c("country", "Year"))
 data_exp<-left_join(data_exp, data, by=c("iso2c"="country", "year"="Year"))
 anyNA(data_exp)
 
-
-indices <- subset(indices, select=c(-1, -4))
-indices <- pdata.frame(indices, c("iso2c", "year"))
 data_exp <-pdata.frame(data_exp, c("iso2c", "year"))
-data_full <- left_join(data_exp, indices, by=c("iso2c", "year"))
+
+anyNA(data_exp)
+
+names(data_exp)[names(data_exp) %in% c("A-Government Stability","B-Socioeconomic Conditions","C-Investment Profile","D-Internal Conflict","E-External Conflict","F-Corruption","G-Military in Politics","H-Religious Tensions","I-Law and Order","J-Ethnic Tensions","K-Democratic Accountability","L-Bureaucracy Quality")] = c("Government Stability","Socioeconomic Conditions","Investment Profile","Internal Conflict","External Conflict","Corruption","Military in Politics","Religious Tensions","Law and Order","Ethnic Tensions","Democratic Accountability","Bureaucracy Quality")
+
+#####------------------- include fin, eco, pol as Variables -----------------------------#####
+library(gdata)
+
+indices <- subset(indices, select=-Country)
+
+data_full <- data_exp %>% left_join(indices, by=c("iso2c","year")) %>% mutate(gdp=gdppc*population) %>% rename.vars(data_full, from="GDP_po", to="gdp_po")
 
 #saveRDS(data_full, file="./data/data_full.RData")
 
@@ -570,66 +556,6 @@ data_full <- left_join(data_exp, indices, by=c("iso2c", "year"))
 @
 
 
-
-Testing
-<<>>=
-
-
-#stack it how we want it 
-data_exp<-data_exp[order(data_exp$year,match(data_exp$iso2c,x)),]
-data_exp<-data_exp[order(match(data_exp$iso2c,x), data_exp$year),]
-
-
-#saveRDS(data_exp, "FDI_data.rds")
-#saveRDS(W.list.inv, "W.list.inv.rds")
-#saveRDS(W.dis, "W.dis.rds")
-#lagrange multiplier test
-
-
-fm<-ihs(value)~log(population)+log(gdppc)+tradec+reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit
-
-#singular mit der gleichung, wenn ich population und gdppc raushau gehts
-
-#fm<-ihs(value)~Within(log(population))+Within(log(gdppc))+tradec+reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit
-
-#fm<-ihs(value)~Within(log(population))+Within(log(gdppc))+Within(tradec)+Within(reso)+log(dist)+Within(log(GDP_po))+bits+Within(pol)+Within(fin)+Within(eco)+Within(lit)
-
-
-head(data_exp)
-
-slmer <- slmtest(fm,data = data_exp ,listw=W.list.inv, test="lme")
-slmer
-slmlag<- slmtest(fm,data = data_exp ,listw=W.list.inv, test="lml")
-slmlag
-
-#geht nur wenn wir bits und dist weglassen
-spherr <- sphtest(x=fm,data = data_exp ,listw=W.list.inv, spatial.model="sarar", method="ML")
-spherr
-
-Within()
-
-bsktest(x=fm, data = data_exp ,listw=W.list.inv, test="LM1")
-bsktest(x=fm, data = data_exp ,listw=W.list.inv, test="CLMmu")
-bsktest(x=fm, data = data_exp ,listw=W.list.inv, test="CLMlambda")
-
-bsjktest(x=fm, data = data_exp ,listw=W.list.inv, test="C.2")
-
-
-sararre <- spreml(fm, data_exp ,w=W.list.inv, lag = TRUE, errors = "semsrre")
-summary(sararre)
-
-
-sarsem<-spml(fm, data_exp, listw=W.list.inv, lag=TRUE, spatial.error="kkp", model="within", effect="twoways", method="eigen", quiet=TRUE, zero.policy=NULL, tol.solce=1e-10)
-
-summary(sarsem)
-effects(sarsem)
-#countrycode um iso2 zu bekommen 
-
-#mice package impotiert datensätze für natural recources verwenden # hab daweil mal igeine lösung
-
-#literacy variable bearbeiten 
-
-@
 
 
 \end{document}
