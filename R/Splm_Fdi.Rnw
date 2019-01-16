@@ -24,7 +24,6 @@ ihs <- function(x) {
     return(y)
 }# alternative Box cox transform
 
-
 getwd()
 setwd("..")
 
@@ -50,22 +49,24 @@ detach(data_exp)
 
 #----------------------------------------------take first difference------------------------------------
 
-data_exp<-pdata.frame(data_exp)
+# data_exp<-pdata.frame(data_exp)
 
-data.p <- data_exp %>%
-  subset(select= c(iso2c, year, population, gdp,GDP_po)) %>%
-  rename.vars(from=c("population", "gdp", "GDP_po"), to=c("pop_g", "gdp_g", "GDP_po_g"))
+#data.p <- data_exp %>%
+ # subset(select= c(iso2c, year, population, gdp,GDP_po)) %>%
+  #rename.vars(from=c("population", "gdp", "GDP_po"), to=c("pop_g", "gdp_g", "GDP_po_g"))
   
 
-for(i in 3:ncol(data.p)){
-  data.p[,i] <- diff(data.p[,i])
-}
+# for(i in 3:ncol(data_exp)){
+#   data_exp[,i] <- diff(data_exp[,i])
+# }
+# 
+# data_exp<-na.omit(data_exp)
 
-data_cty <- data_exp %>%
-  left_join(data.p, by=c("iso2c", "year")) %>%
-  na.omit()
+#data_cty <- data_exp %>%
+ # left_join(data.p, by=c("iso2c", "year")) %>%
+  #na.omit()
 
-remove(data.p)
+#remove(data.p)
 
 
 # fm<-value~+gdp+log(lit)+bits#mit diffs kommen wir daweil noch zu keinem besseren Ergebnis
@@ -86,11 +87,18 @@ data_exp<-data_exp[order(match(data_exp$iso2c,rownames(W.dis)), data_exp$year),]
 ##------------------------------------------------------------------------------------------------------------------------------
 
 colnames(data_exp)
-fm<-ihs(value)~log(population)+log(gdp)+log(lit)+ log(reso)+log(GDP_po)+bits+Govers+Invest+LawandOrder+DemocraticAccountability+DebtServ+ForDebt+IntLiq+Inflation+year#as.numeric(year)+I(as.numeric(year)^2)
-#fm<-ihs(value)~Within(log(population))+Within(log(gdppc))+tradec+reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit
-#fm<-ihs(value)~log(population)+log(gdp)+log(lit)+log(tradec)+ log(reso)+log(dist)+log(GDP_po)+bits+Govers+Socio+Invest+InterC+ExterC+Corruption+MilitaryPo+Religious+LawandOrder+EthnicTensions+DemocraticAccountability+BureaucracyQuality+CAXGS+DebtServ+ForDebt+IntLiq+XRStab+BudBal+CACC+Inflation+as.numeric(year)+I(as.numeric(year)^2)
+fm<-ihs(value)~log(population)+log(gdp)+log(tradec)+log(dist)+lit+reso+log(GDP_po)+bits+Govers+Invest+LawandOrder+DemocraticAccountability+BureaucracyQuality+I(DemocraticAccountability*BureaucracyQuality)+ForDebt+IntLiq+XRStab+Inflation+year#as.numeric(year)+I(as.numeric(year)^2)
+fm<-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(GDP_po)+bits+pol_du+fin+eco+lit+year
+#fm<-ihs(value)~log(population)+log(gdp)+log(lit)+log(tradec)+ log(reso)+log(dist)+log(GDP_po)+bits+Govers+Socio+Invest+InterC+ExterC+Corruption+MilitaryPo+Religious+LawandOrder+EthnicTensions+DemocraticAccountability+BureaucracyQuality+CAXGS+DebtServ+ForDebt+IntLiq+XRStab+BudBal+CACC+Inflation+year
 #fm<-ihs(value)~Within(log(population))+Within(log(gdppc))+Within(tradec)+Within(reso)+log(dist)+Within(log(GDP_po))+bits+Within(pol)+Within(fin)+Within(eco)+Within(lit)
-#fm<-ihs(value)~log(population)+log(gdp)+log(tradec)+ reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit
+
+plot((data_exp$Inflation))
+#to test country and time fixed effects
+
+data_exp$pol_du<-ifelse(data_exp$pol<50,0,ifelse(data_exp$pol<60,1,ifelse(data_exp$pol<70,2,3)))
+data_exp$pol_du<-as.factor(data_exp$pol_du)
+# data_exp$iso2c<-as.factor(data_exp$iso2c)
+# fm<-ihs(value)~log(population)+log(gdp)+tradec+lit+reso+log(GDP_po)+pol+fin+iso2c+year
 
 
 
@@ -110,8 +118,6 @@ slmtest(fm,data = data_exp ,listw=W.list.inv, test="rlml")
 spherr <- sphtest(x=fm,data = data_exp ,listw=W.list.inv, spatial.model="sarar", method="ML")
 spherr
 
-
-
 bsktest(x=fm, data = data_exp ,listw=W.list.inv, test="LM1")
 bsktest(x=fm, data = data_exp ,listw=W.list.inv, test="CLMmu")
 bsktest(x=fm, data = data_exp ,listw=W.list.inv, test="CLMlambda")
@@ -119,13 +125,20 @@ bsktest(x=fm, data = data_exp ,listw=W.list.inv, test="CLMlambda")
 bsjktest(x=fm, data = data_exp ,listw=W.list.inv, test="C.2")
 bsjktest(x=fm, data = data_exp ,listw=W.list.inv, test="C.3")
 
-sararre <- spreml(fm, data_exp ,w=W.list.inv, lag = FALSE, errors = "sr")
+sararre <- spreml(fm, data_exp ,w=W.list.inv, lag = TRUE, errors = "semsr")
 summary(sararre)
+
+plot(residuals(sararre))
+
+mean(residuals(sararre)[300:400])#still not good
 #how to get the impacts? 
 
-
+purtest(population, data_exp, exo = "none", test = "madwu")
+length()
 #vlt sollten wir GDP ohne per capita nehmen
 
+summary(data_exp$pol)
+data_exp$pol_du<-ifelse(data_exp$pol>=57,1,0)
 
 #sarsem<-spml(fm, data_exp, listw=W.list.inv, lag=TRUE, spatial.error="kkp", model="within", effect="time", method="eigen", quiet=TRUE, zero.policy=NULL, tol.solce=1e-10)#komplett schlecht
 
@@ -145,14 +158,14 @@ impacts(sararre, listw = W.list.inv, time = time)
 
 plmfm<-ihs(value)~log(population)+log(gdppc)+log(tradec)+ log(reso)+log(dist)+bits+pol+fin+eco
 
-plm<-plm(plmfm, data_exp, model = "random")
+plm<-plm(fm, data_exp, effect = "twoways", method = "within")
 summary(plm)
 
 
+require(lmtest)
+coeftest(plm, vcov. = vcovHC)
 
-
-
-
+plot(residuals(plm))
 
 ##---------------------------------------------------without zero countries---------------------------------------------------
 data_exp1<-filter(data_exp, iso2c != "BF")
@@ -242,7 +255,37 @@ choro.legend(55.98108,13.93117,  sh=shades, title="FDI Inflows from China 2015",
 north.arrow(55.98108,30.13448, 1, col="red")
 @
 
+Um regression Tables zu bauen
+<<>>=
+#option 1
+library(pander)
 
+smry <- summary(sararre)
+  pander(data.frame(R.Square = smry$rsqr))
+  pander(smry$CoefTable)
+
+
+#option 2  
+zaza<-summary(sararre)$CoefTable 
+create_table = function(table_)
+{
+    p_table = data.frame(Variables=NA, Values=NA)
+    for(i in 1:dim(table_)[1])
+    {
+        est_error = table_[i,c(1,4)] # Im assuming that you know that 2 first columns are the values that you want
+        name = c(rownames(table_)[i], '   p-value') # The final table rownames
+        name_values = cbind(Variables=name, Values=est_error)
+        p_table = rbind(p_table, name_values)
+    }
+    rownames(p_table) = 1:dim(p_table)[1]
+    return(na.omit(p_table))
+}
+
+table1<-create_table(zaza)
+library(xtable)
+xtable::xtable(table1)
+
+@
 
 
 Fragen:
@@ -280,11 +323,17 @@ To do:
 -base plm mit Spatial vergleichen
 -Lybien raus geben, ohne Lybien gleich viel bessere Ergebnisse 
 
-
+Variablen checks:
+-keine Effekte, wenn pol als dummy definiert, besser die Variable an sich weil koeffizienten sich immer drehen wenn andere definition und nicht signifikant, außer wenn so unterschieden wie in der Definition für country risk guide
+-kein interaction effekt zwischen pol und reso, sonst keine Erkenntnisse von dem Chinese FDI paper
+-bayesian variable Selection paper nicht für chines FDI´s nach africa, allerdings: log(dist)besser als nur dist, auch log(tradc) eine spur besser (stimmt das?), legal inst
+-Buckley Paper explains why investment profile (measured as Contract Viability/Expropriation,Profits Repatriation,Payment Delays) could be negative 
 
 Problems we have run into:
-
+-could not take of log of FDI, took the ihs function
 -the variables had not always that impact we would have expected, that´s why we had a more detailed look what determines chinese FDI´s in difference to normal FDI´s to look for which there is a theoretical reason and for which not. 
 -Serial Correlation
 -Non-Staionarity
+-bits do not change over time
+-Gdp_po vlt für ganz africa berechnen?
 \end{document}
