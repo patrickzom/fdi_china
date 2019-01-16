@@ -34,9 +34,8 @@ ihs <- function(x) {
 #-----------------------------------------------------Differencing all - new data set is data_exp_cty
 
 data.p <- data %>%
-  mutate(gdp = gdppc*population) %>%
-  subset(select= c(iso2c, year, population, gdp, gdppc, GDP_po, gdppc_po)) %>%
-  rename.vars(from=c("population", "gdp", "gdppc", "GDP_po", "gdppc_po"), to=c("pop_g", "gdp_g", "gdppc_g", "GDP_po_g", "gdppc_po_g")) %>%
+  subset(select= c(iso2c, year, population, gdp, gdppc, gdp_po, gdppc_po)) %>%
+  rename.vars(from=c("population", "gdp", "gdppc", "gdp_po", "gdppc_po"), to=c("pop_g", "gdp_g", "gdppc_g", "GDP_po_g", "gdppc_po_g")) %>%
   pdata.frame(row.names=TRUE)
 
 for(i in 3:ncol(data.p)){
@@ -202,10 +201,20 @@ Trend: GDP_po; population; gdppc (nur leicht); pol, fin, eco (unterschiedliche T
 
 
 <<ggplot with data_exp_cty>>=
-ggplot(data_cty, aes(x=as.numeric(year), y=gdppc_po, group=iso2c, colour=iso2c))+
+ggplot(data_cty, aes(x=as.numeric(year), y=gdp_g, group=iso2c, colour=iso2c))+
   geom_line()+
   geom_point()+
   scale_x_continuous(breaks=as.numeric(data_cty$year))+
+  labs(x="Year", y="X")+
+  theme_minimal()
+@
+
+
+<<ggplot with data_exp_cty>>=
+ggplot(data.pa, aes(x=as.numeric(year), y=gdp_g, group=iso2c, colour=iso2c))+
+  geom_line()+
+  geom_point()+
+  scale_x_continuous(breaks=as.numeric(data.pa$year))+
   labs(x="Year", y="X")+
   theme_minimal()
 @
@@ -373,6 +382,108 @@ summary(b1_all)
 -2*b1_all$logLik+2*(length(data_cty)+4) #1919.012
 
 
+@
+
+
+
+<<>>=
+#base case without trend
+fm<-ihs(value)~ihs(gdppc_g)+tradec+reso+log(dist)+bits+pol+fin+eco+lit
+a <- lm(fm, data=data.pa)
+summary(a)
+
+#base case with linear trend
+fm<-ihs(value)~ihs(gdppc_g)+tradec+reso+log(dist)+bits+pol+fin+eco+lit+as.numeric(year)
+b <- lm(fm, data=data.pa)
+summary(b)
+
+#base case with quadratic trend
+fm<-ihs(value)~ihs(gdppc_g)+tradec+reso+log(dist)+bits+pol+fin+eco+lit+as.numeric(year)+I(as.numeric(year)^2)
+c <- lm(fm, data=data.pa)
+summary(c)
+
+#base case with cubed trend
+fm<-ihs(value)~ihs(gdppc_g)+tradec+reso+log(dist)+bits+pol+fin+eco+lit+as.numeric(year)+I(as.numeric(year)^2)+I(as.numeric(year)^3)
+d <- lm(fm, data=data.pa)
+summary(d)
+
+AIC(a) #1935.375
+AIC(b) #1923.019
+AIC(c) #1922.81
+AIC(d) #1924.552
+
+#Choose trend model
+fm<-ihs(value)~ihs(gdppc_g)+tradec+reso+log(dist)+bits+pol+fin+eco+lit+as.numeric(year)
+
+# Full model including random effects ("model"), lagged dependent ("lag=TRUE") and spatial error ("spatial.error")
+full_b <- spml(fm, data = data.pa, listw=W.list.inv, model="random", lag=TRUE, spatial.error="b")
+summary(full_b)
+# Full model including random effects ("model"), lagged dependent ("lag=TRUE") and spatial error ("spatial.error")
+full_kkp <- spml(fm, data = data.pa, listw=W.list.inv, model="random", lag=TRUE, spatial.error="kkp")
+summary(full_kkp)
+##### ----- Kein Unterschied zwischen kkp und b
+
+# ML panel with iid errors
+b_serial <- spreml(fm, data.pa ,w=W.list.inv, lag = FALSE, errors = "ols")
+summary(b_serial)
+-2*b_serial$logLik+2*length(data_cty) #1970.81
+
+# ML panel with spatial lag, random effects, AR(1) serial correlation, spatial error correlation
+b_all <- spreml(fm, data.pa ,w=W.list.inv, lag = TRUE, errors = "semsrre")
+summary(b_all)
+-2*b_serial$logLik+2*(length(data_cty)+4) #1978.81
+
+
+#####----------------------------- Base1 Model -----------------------------#####
+
+#base case without trend
+fm<-ihs(value)~ihs(gdppc_g)+ihs(gdppc_po_g)+tradec+reso+log(dist)+bits+pol+fin+eco+lit
+a1 <- lm(fm, data=data.pa)
+summary(a1)
+
+#base case with linear trend
+fm<-ihs(value)~ihs(gdppc_g)+ihs(gdppc_po_g)+tradec+reso+log(dist)+bits+pol+fin+eco+lit+as.numeric(year)
+b1 <- lm(fm, data=data.pa)
+summary(b1)
+
+#base case with quadratic trend
+fm<-ihs(value)~ihs(gdppc_g)+ihs(gdppc_po_g)+tradec+reso+log(dist)+bits+pol+fin+eco+lit+as.numeric(year)+I(as.numeric(year)^2)
+c1 <- lm(fm, data=data.pa)
+summary(c1)
+
+#base case with cubed trend
+fm<-ihs(value)~ihs(gdppc_g)+ihs(gdppc_po_g)+tradec+reso+log(dist)+bits+pol+fin+eco+lit+as.numeric(year)+I(as.numeric(year)^2)+I(as.numeric(year)^3)
+d1 <- lm(fm, data=data.pa)
+summary(d1)
+
+AIC(a1) #1934.53
+AIC(b1) #1924.418
+AIC(c1) #1924.36
+AIC(d1) #1926.075
+
+#Choose trend model
+fm<-ihs(value)~ihs(gdppc_g)+ihs(gdppc_po_g)+tradec+reso+log(dist)+bits+pol+fin+eco+lit+as.numeric(year)
+
+try <- plm(fm, data=data.pa, effect="time", model="within")
+summary(try)
+
+# Full model including random effects ("model"), lagged dependent ("lag=TRUE") and spatial error ("spatial.error")
+full_b1 <- spml(fm, data = data.pa, listw=W.list.inv, model="random", lag=TRUE, spatial.error="b")
+summary(full_b1)
+# Full model including random effects ("model"), lagged dependent ("lag=TRUE") and spatial error ("spatial.error")
+full_kkp1 <- spml(fm, data = data.pa, listw=W.list.inv, model="random", lag=TRUE, spatial.error="kkp")
+summary(full_kkp1)
+##### ----- Kein großer Unterschied zwischen kkp und b
+
+# ML panel with iid errors
+b1_serial <- spreml(fm, data.pa ,w=W.list.inv, lag = FALSE, errors = "ols")
+summary(b1_serial)
+-2*b1_serial$logLik+2*length(data_cty) #1970.36
+
+# ML panel with spatial lag, random effects, AR(1) serial correlation, spatial error correlation
+b1_all <- spreml(fm, data.pa ,w=W.list.inv, lag = TRUE, errors = "semsrre")
+summary(b1_all)
+-2*b1_all$logLik+2*(length(data_cty)+4) #1919.012
 @
 
 
