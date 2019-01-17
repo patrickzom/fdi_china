@@ -33,13 +33,15 @@ ihs <- function(x) {
 
 #-----------------------------------------------------Differencing all - new data set is data_exp_cty
 
+names(data)[names(data) %in% c("Government Stability","Socioeconomic Conditions","Investment Profile","Internal Conflict","External Conflict","Corruption","Military in Politics","Religious Tensions","Law and Order","Ethnic Tensions","Democratic Accountability","Bureaucracy Quality")] = c("Govers","Socio","Invest","InterC","ExterC","Corruption","MilitaryPo","Religious","LawandOrder","EthnicTensions","DemocraticAccountability","BureaucracyQuality")
+
 data.p <- data %>%
   subset(select= c(iso2c, year, population, gdp, gdppc, gdp_po, gdppc_po)) %>%
   rename.vars(from=c("population", "gdp", "gdppc", "gdp_po", "gdppc_po"), to=c("pop_g", "gdp_g", "gdppc_g", "GDP_po_g", "gdppc_po_g")) %>%
   pdata.frame(row.names=TRUE)
 
 for(i in 3:ncol(data.p)){
-  data.p[,i] <- diff(data.p[,i])
+  data.p[,i] <- diff(log(data.p[,i]))
 }
 
 data_cty <- data %>%
@@ -85,7 +87,74 @@ head(data_exp_cou)
 
 @
 
+Estimation & testing with data stacked by country without Lybia
+<<Estimation with data>>=
+##- 2. ESTIMATING
+# λ : (lambda) : Spatial autoregressive parameter
+# σ² ("phi") : Random effects
+# ρ : (rho) : Spatial error component
+# ψ (psi) : Serial correlation
 
+fm<-ihs(value)~log(population)+log(gdp)+tradec+reso+log(dist)+log(gdp_po)+bits+pol+fin+eco+lit+year
+
+fm <- ihs(value)~log(population)+log(gdp)+log(tradec)+log(dist)+lit+reso+bits +Govers+Socio+Invest+InterC+ExterC+Corruption+MilitaryPo+Religious+LawandOrder+EthnicTensions+DemocraticAccountability+BureaucracyQuality +CAXGS+DebtServ+ForDebt+IntLiq+XRStab+BudBal+CACC+GDPGrowth+Inflation+as.numeric(year)#+I(as.numeric(year)^2)
+
+fm <- ihs(value)~log(population)+log(gdp)+log(tradec)+log(dist)+lit+reso+bits +Govers+Socio+Invest+InterC+ExterC+Corruption+MilitaryPo+LawandOrder+EthnicTensions+DemocraticAccountability+BureaucracyQuality +DebtServ+ForDebt+GDPGrowth+Inflation+as.numeric(year)#+I(as.numeric(year)^2)
+
+fm <- ihs(value)~log(population)+log(gdp)+log(tradec)+log(dist)+lit+reso+bits +Invest+LawandOrder+DemocraticAccountability+BureaucracyQuality +DebtServ+ForDebt+GDPGrowth+Inflation+as.numeric(year)#+I(as.numeric(year)^2)
+
+fm <- ihs(value)~log(gdppc)+log(tradec)+log(dist)+lit+reso+bits +Invest+LawandOrder+DemocraticAccountability+BureaucracyQuality +DebtServ+ForDebt+GDPGrowth+Inflation+as.numeric(year)#+I(as.numeric(year)^2)
+
+base <- lm(fm, data)
+summary(base)
+AIC(base)
+
+
+#Test for spatial error (LM)
+slmtest(fm,data ,listw=W.list.inv, test="lme")
+#LM = 0.11333, df = 1, p-value = 0.7364 -> no spatial error dependence
+
+#Test for spatial lag
+slmtest(fm,data ,listw=W.list.inv, test="lml")
+#Result: M = 0.095551, df = 1, p-value = 0.7572 -> no spatial lag dependence
+
+#Use sphtest to perform a spatial Hausmann test: fixed effects?
+#Cannot use ML due to Singularity problems
+sphtest(x=fm, data, listw=W.list.inv, spatial.model="sarar", method="GM")
+#Result: chisq = 53.57, df = 10, p-value = 5.833e-08 -> Combined model is inconsistent - keep fixed effects model
+
+#"bsktest"
+bsktest(x=fm, data, listw=W.list.inv, test="LMH") #p-value = 0.4334 -> No Random Regional Effects and Spatial autocorrelation
+
+#"bsjktest" - Is there serial correlation on top?
+bsjktest(x=fm, data ,listw=W.list.inv, test="J") # p-value < 2.2e-16 -> random effects or serial corr. or spatial dependence in error terms
+bsjktest(x=fm, data ,listw=W.list.inv, test="C.1") #Error!
+bsjktest(x=fm, data,listw=W.list.inv, test="C.2") # p-value = 1.556e-05 -> serial corr. in error terms, sub RE and spatial dependence
+bsjktest(x=fm, data,listw=W.list.inv, test="C.3") # p-value = 1 -> no random effects, sub serial corr. and spatial dependence in error terms
+
+base <- spreml(fm, data ,w=W.list.inv, lag = FALSE, errors = "sr")
+summary(base)
+#Serial correlation and spatial autroregressive parameter are significant
+-2*base$logLik+2*length(data)
+
+
+data$iso2c <- as.factor(data$iso2c)
+data$year <- as.factor(data$year)
+
+fm <- ihs(value)~log(population)+log(gdp)+log(tradec)+log(dist)+lit+reso+bits +Invest+LawandOrder+DemocraticAccountability+BureaucracyQuality +DebtServ+ForDebt+GDPGrowth+Inflation+year+iso2c
+
+sararre <- spreml(fm, data ,w=W.list.inv, lag = FALSE, errors = "sr")
+summary(sararre)
+#Serial correlation and spatial autroregressive parameter are significant
+-2*sararre$logLik+2*length(data)
+
+
+@
+
+
+
+
+Estimation with data_exp_year (stacked by year) with Lybia
 <<Estimation with data_exp_year>>=
 ##- 2. ESTIMATING
 # λ : (lambda) : Spatial autoregressive parameter
@@ -138,9 +207,7 @@ effects(sarsem)
 
 @
 
-
-Testing stacked by year
-
+Testing stacked by year with Lybia
 <<Testing with data_exp_year>>=
 #Locally robust panel Lagrange Multiplier tests for spatial dependence
 #Should we use spatial lag or spatial error model or both?
@@ -189,6 +256,9 @@ bsjktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="C.3") # p-value = 1
 @
 
 
+
+
+Grafikal Analysis with data_exp_year (with Lybia)
 <<ggplot with data_exp_year>>=
 ggplot(data_exp_year, aes(x=year, y=reso, group=iso2c, colour=iso2c))+
   geom_line()+
@@ -199,17 +269,34 @@ ggplot(data_exp_year, aes(x=year, y=reso, group=iso2c, colour=iso2c))+
 @
 Trend: GDP_po; population; gdppc (nur leicht); pol, fin, eco (unterschiedliche Trends), 
 
-
+Grafikal Analysis with data_exp_cty
 <<ggplot with data_exp_cty>>=
-ggplot(data_cty, aes(x=as.numeric(year), y=gdp_g, group=iso2c, colour=iso2c))+
+
+data.p <- data_exp %>%
+  subset(select= c(iso2c, year, population, gdppc, GDP_po)) %>%
+  rename.vars(from=c("population", "gdppc", "GDP_po"), to=c("pop_g", "gdppc_g", "GDP_po_g")) %>%
+  pdata.frame(row.names=TRUE)
+
+for(i in 3:ncol(data.p)){
+  data.p[,i] <- diff(log(data.p[,i]))
+}
+
+data_exp$year <- as.factor(data_exp$year)
+data.p <- data_exp %>%
+  left_join(data.p, by=c("iso2c", "year")) %>%
+  na.omit()
+
+remove(data.p)
+
+ggplot(data.p, aes(x=as.numeric(year), y=gdppc_g, group=iso2c, colour=iso2c))+
   geom_line()+
   geom_point()+
   scale_x_continuous(breaks=as.numeric(data_cty$year))+
-  labs(x="Year", y="X")+
+  labs(x="Year", y="GDP per capita growth")+
   theme_minimal()
 @
 
-
+Grafikal Analysis with data_cty (diffed Variables)
 <<ggplot with data_exp_cty>>=
 ggplot(data.pa, aes(x=as.numeric(year), y=gdp_g, group=iso2c, colour=iso2c))+
   geom_line()+
@@ -218,6 +305,9 @@ ggplot(data.pa, aes(x=as.numeric(year), y=gdp_g, group=iso2c, colour=iso2c))+
   labs(x="Year", y="X")+
   theme_minimal()
 @
+
+
+
 
 
 Testing with stationary data
@@ -385,7 +475,6 @@ summary(b1_all)
 @
 
 
-
 <<>>=
 #base case without trend
 fm<-ihs(value)~ihs(gdppc_g)+tradec+reso+log(dist)+bits+pol+fin+eco+lit
@@ -485,6 +574,8 @@ b1_all <- spreml(fm, data.pa ,w=W.list.inv, lag = TRUE, errors = "semsrre")
 summary(b1_all)
 -2*b1_all$logLik+2*(length(data_cty)+4) #1919.012
 @
+
+
 
 
 
