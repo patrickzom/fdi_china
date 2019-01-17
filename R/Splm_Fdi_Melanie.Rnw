@@ -278,7 +278,7 @@ data.p <- data_exp %>%
   pdata.frame(row.names=TRUE)
 
 for(i in 3:ncol(data.p)){
-  data.p[,i] <- diff(log(data.p[,i]))
+  data.p[,i] <- diff(data.p[,i])
 }
 
 data_exp$year <- as.factor(data_exp$year)
