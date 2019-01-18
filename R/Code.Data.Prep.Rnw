@@ -556,6 +556,71 @@ data_full <- data_exp %>% left_join(indices, by=c("iso2c","year")) %>% mutate(gd
 @
 
 
+<<BMS>>=
+library(BMS)
+#data <- readRDS("./data/data_full.RData")
+
+#data_exp is stacked by country
+#W.list.inv<-readRDS("./data/W.list.inv.rds")
+#W.dis<-readRDS("./data/W.dis.rds")
+
+data_year<-data[order(data$year,match(data$iso2c,rownames(W.dis))),] #stacked by year
+
+#reduce data set and change columns
+data_test <- data[,c(34, 3:6, 8, 9, 33, 35:38, 11:32)]
+
+#Necessary functions
+panel_unstack= function(stackeddata, tstep=NULL) {
+  # stackeddata is a stacked data frame/matrix ordered in the following way
+  #               Variable1  Variable2
+  # ctry1_time1
+  # ctry1_time2
+  # ...
+  # ctry2_time1
+  # ctry2_time2
+  # ...
+  # tstep is the number of time points
+  # panel_unstack produces a 3-dimensional array out of that
+ 
+  bigT=nrow(stackeddata);K=ncol(stackeddata);
+  if (is.null(tstep)) tstep=bigT
+  X1=aperm(array(as.vector(t(as.matrix(stackeddata))),dim=c(K,tstep,bigT/tstep)), perm=c(2,1,3))
+  try(dimnames(X1)[[1]] <-  unique(sapply(strsplit(rownames(stackeddata),"_"),
+function(x) x[[2]])), silent=TRUE)
+  try(dimnames(X1)[[2]] <-  colnames(stackeddata), silent=TRUE)
+  try(dimnames(X1)[[3]] <-  unique(sapply(strsplit(rownames(stackeddata),"_"),
+function(x) x[[1]])), silent=TRUE)
+  return(X1)
+}
+
+panel_stack = function(array3d) {
+  x1= apply(array3d,2,rbind)
+  try(rownames(x1) <-  as.vector(sapply(dimnames(array3d)[[3]],
+FUN=function(x) paste(x, dimnames(array3d)[[1]], sep="_"))), silent=TRUE)
+  return(as.data.frame(x1))
+}
+
+demean = function(x, margin) {
+ #x is an array
+ #margin is the dimension along which should be demeaned
+ if (!is.array(x)) stop("x must be an array/matrix")
+ otherdims=(1:length(dim(x)))[-margin]
+  sweep(x,otherdims,apply(x,otherdims,mean))
+}
+
+
+#Use the functions 
+dat.array=panel_unstack(data_test, tstep=13)
+
+timeDat=panel_stack(demean(dat.array,3))
+countryDat=panel_stack(demean(dat.array,1))
+
+modelCd=bms(countryDat[,1:12], burn=1000, iter=5000, mcmc="bd",user.int=F)
+modelTd=bms(timeDat[,1:7],user.int=F)
+
+coef(modelCd)
+
+@
 
 
 \end{document}
