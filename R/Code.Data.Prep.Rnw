@@ -603,7 +603,7 @@ demean = function(x, margin) {
 
 
 #reduce data set and change columns - removes bits, dist, iso2c, year, gdppc_po
-data_test <- data[,c(34, 3:6, 8, 33, 35:38, 11:32)]
+data_test <- data[,c(34, 3:6, 8, 33, 39, 35:38, 11:32)]
 
 #Use the functions 
 dat.array <- panel_unstack(data_test, tstep=13)
@@ -611,56 +611,68 @@ timeDat <- panel_stack(demean(dat.array,3))
 countryDat <- panel_stack(demean(dat.array,1))
 
 #Only Full-Indices Variables
-modelCd <- bms(countryDat[,1:11], burn=50000, iter=500000, mcmc="bd",user.int=T)
-modelTd <- bms(timeDat[,1:11], burn=50000, iter=500000, mcmc="bd",user.int=T)
+modelCd <- bms(countryDat[,1:12], burn=200000, iter=400000, mcmc="rev.jump",user.int=T)
+modelTd <- bms(timeDat[,1:12], burn=200000, iter=400000, mcmc="rev.jump",user.int=T)
 
 #Re-Shuffel Order of Variables
-data_short <- data_test[,c(1,4,5,7,6,2,3,11,10,9,8)]
+data_short <- data_test[,c(1,12,4,5,7,6,2,3,11,10,9,8)]
 dat.array <- panel_unstack(data_short, tstep=13)
 timeDat <- panel_stack(demean(dat.array,3))
 countryDat <- panel_stack(demean(dat.array,1))
-modelCd <- bms(countryDat[,1:11], burn=50000, iter=500000, mcmc="bd",user.int=T)
-modelTd <- bms(timeDat[,1:11], burn=50000, iter=500000, mcmc="bd",user.int=T)
+modelCd <- bms(countryDat[,1:12], burn=200000, iter=400000, mcmc="bd",user.int=T)
+modelTd <- bms(timeDat[,1:12], burn=200000, iter=400000, mcmc="bd",user.int=T)
 
-#so changes in the results
-#timeDat: gdp, lit, population
-#countryDat: gdppc, populatio, gdp_po
+#shuffeling doen't changes in the results, mcmc-algorithm neither
+#timeDat: population, lit, pol, reso
+#countryDat: gdppc, population, gdp_po, invcost, reso
 
-#remove South Africa from the data set
-data1 <- data %>% filter(iso2c!="ZA")
-data_test1 <- data1[,c(34, 3:6, 8, 33, 35:38, 11:32)] #reduce data set and change columns - removes bits, dist, iso2c, year, gdppc_po
-dat.array1 <- panel_unstack(data_test1, tstep=13)
-timeDat1 <- panel_stack(demean(dat.array1,3))
-countryDat1 <- panel_stack(demean(dat.array1,1))
-modelCd1 <- bms(countryDat1[,1:11], burn=50000, iter=500000, mcmc="bd",user.int=T) #populatio, gdp_po; low: tradec, gdppc, lit, reso
-modelTd1 <- bms(timeDat1[,1:11], burn=50000, iter=500000, mcmc="bd",user.int=T) #lit, population; low: pol, reso
+
+#reduce data set and change columns - removes bits, dist, iso2c, year, gdppc_po, invcost
+data_test1 <- data[,c(34, 3:6, 8, 33, 35:38, 11:32)]
+
+#Use the functions 
+dat.array <- panel_unstack(data_test1, tstep=13)
+timeDat <- panel_stack(demean(dat.array,3))
+countryDat <- panel_stack(demean(dat.array,1))
+
+#Only Full-Indices Variables
+modelCd1 <- bms(countryDat[,1:11], burn=200000, iter=400000, mcmc="rev.jump",user.int=T)
+modelTd1 <- bms(timeDat[,1:11], burn=200000, iter=400000, mcmc="rev.jump",user.int=T)
+
+#timeDat: population, lit, pol, reso
+#countryDat: population, gdppc, gdp_po, reso, lit
 
 
 #We start wirth timeDat and keep use single indices from pol
 data_test2 <- data_test1[,c(1:7, 9:23)] 
 dat.array2 <- panel_unstack(data_test2, tstep=13)
 timeDat2 <- panel_stack(demean(dat.array2,3))
-modelTd2 <- bms(timeDat2, burn=50000, iter=500000, mcmc="bd",user.int=T) #lit, population, gdp, Socioeconomic Conditions
+modelTd2 <- bms(timeDat2, burn=1000000, iter=2000000, mcmc="bd",user.int=T) #lit, Socioeconomic Conditions, population, gdp
+modelTd2 <- bms(timeDat2, mcmc="enumerate",user.int=T)
 #Not sensitive to order or mcmc-algorithm
 #countryDat
 countryDat2 <- panel_stack(demean(dat.array2,1))
-modelCd2 <- bms(countryDat2, burn=50000, iter=500000, mcmc="bd",user.int=T)#population, gdp_po, lit, gdppc, tradec, Religious Tension
+modelCd2 <- bms(countryDat2, burn=10000000, iter=2000000, mcmc="bd",user.int=T) #population, gdp_po, gdppc, Religious Tension
+modelCd2 <- bms(countryDat2, mcmc="enumerate",user.int=T)
 
 #Single indices from fin
 data_test3 <- data_test1[,c(1:8, 10:11, 24:28)] 
 dat.array3 <- panel_unstack(data_test3, tstep=13)
 timeDat3 <- panel_stack(demean(dat.array3,3))
-modelTd3 <- bms(timeDat3, burn=50000, iter=500000, mcmc="bd",user.int=T) #population, lit, pol, IntLiq
+modelTd3 <- bms(timeDat3, burn=50000, iter=900000, mcmc="bd",user.int=T) #population, lit, pol*, reso*
 countryDat3 <- panel_stack(demean(dat.array3,1))
-modelCd3 <- bms(countryDat3, burn=50000, iter=500000, mcmc="bd",user.int=T) #population, gdp_po, tradec, gdppc, lit, XRStab
+modelCd3 <- bms(countryDat3, burn=50000, iter=900000, mcmc="bd",user.int=T) #population, gdp_po, gdppc, XRStab*, ForDebt*, reso*
 
 #Single indices from eco
 data_test4 <- data_test1[,c(1:9, 11, 29:33)] 
 dat.array4 <- panel_unstack(data_test4, tstep=13)
 timeDat4 <- panel_stack(demean(dat.array4,3))
-modelTd4 <- bms(timeDat4, burn=50000, iter=500000, mcmc="bd",user.int=T) #lit, population, pol, GDPGrowth
+modelTd4 <- bms(timeDat4, burn=50000, iter=900000, mcmc="bd",user.int=T) #population, lit, pol, reso*
 countryDat4 <- panel_stack(demean(dat.array4,1))
-modelCd4 <- bms(countryDat4, burn=50000, iter=500000, mcmc="bd",user.int=T) #population*, gdp_po, gdppc, tradec, reso, lit, Inflation*, GDPGrowth, BudBal,
+modelCd4 <- bms(countryDat4, burn=50000, iter=900000, mcmc="bd",user.int=T) #population, inflation, gdp_po, GDPGrowth, gdppc, reso*, BudBal*,
+
+#Conclusion timeDat: population, lit, (pol, reso) 
+#conlcusion country: population, gdp_pc, gdppc 
 
 #Put new set together based on above results
 #Stacked per time
