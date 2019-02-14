@@ -105,8 +105,6 @@ FDi data + shapefile
 data2<-readxl::read_xlsx("./data/FDI_China_Outflows_africa_2015_unctad.xlsx", sheet = 2)
 data<-gather(data2,"country", "value",2:57)
 
-
-
 shp <- readOGR(dsn = "./data/Eurostat_RG_2016_4326_M01", layer ="CNTR_RG_01M_2016_4326", encoding = "UTF-8")
 
 @
@@ -120,8 +118,6 @@ africa<-data1$country
 remove(data1)
 #----------------------------------filter african countries
 shp <- shp[shp$NAME_ENGL %in% africa, ]
-
-
 
 
 
@@ -201,8 +197,10 @@ A<-A%>%group_by(Country, iso2c, year)%>%summarise(pol=sum(pol))#calculate sum of
 ind<-gather(POL,"year", "pol",3:15)
 ind<-ind%>%group_by(.id, Country, iso2c, year)%>%summarise(pol=sum(pol))#calculate sum of all political risk variables
 
-#start ordering
-ind<-filter(ind, iso2c!="LY")#to get Libya out
+#to get Libya and South Africa out
+ind<-filter(ind, iso2c!="LY")
+ind<-filter(ind, iso2c!="ZA")
+
 
 x<-levels(as.factor(ind$iso2c))
 shp <- shp[shp$CNTR_ID %in% x, ]
@@ -329,9 +327,9 @@ reso<-WDI(country = "all", indicator = c("NY.GDP.TOTL.RT.ZS"), start=2003, end=2
 reso <- reso[reso$iso2c %in% x, ]
 
 
-sum(is.na(reso))#in libya fehlen die letzten vier Jahre, wegen Bürgerkrieg
+sum(is.na(reso))
 
-
+#in libya fehlen die letzten vier Jahre, wegen Bürgerkrieg
 #auch werte für 2012, 2013 auf https://tradingeconomics.com/libya/total-natural-resources-rents-percent-of-gdp-wb-data.html
 #2013#42
 #2012#59
@@ -533,10 +531,7 @@ library(gdata)
 
 indices <- subset(indices, select=-Country)
 
-data_full <- data_exp %>% left_join(indices, by=c("iso2c","year")) %>% mutate(gdp=gdppc*population) %>% rename.vars(data_full, from="GDP_po", to="gdp_po") 
-
-
-data_full <- data_full %>% mutate(invest=1/(pol+fin+eco))
+data_full <- data_exp %>% left_join(indices, by=c("iso2c","year")) %>% mutate(gdp=gdppc*population) %>% rename.vars(from="GDP_po", to="gdp_po") %>% mutate(invcost=1/(pol+fin+eco))
 
 #saveRDS(data_full, file="./data/data_full.RData")
 

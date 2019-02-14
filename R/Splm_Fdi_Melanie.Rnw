@@ -25,12 +25,113 @@ data_exp<-readRDS("./data/FDI_data_large.rds")
 W.list.inv<-readRDS("./data/W.list.inv.rds")
 W.dis<-readRDS("./data/W.dis.rds")
 
+
+
 #-----------------------------------------------------Function
 ihs <- function(x) {
     y <- log(x + sqrt(x ^ 2 + 1))
     return(y)
 }# alternative Box cox transform
 
+
+@
+
+<<Analysis without South Africa and Lybia>>=
+
+
+#base case without trend
+fm<-ihs(value)~log(population)+log(gdp)+tradec+reso+log(dist)+log(gdp_po)+bits+invcost+lit
+a <- lm(fm, data)
+summary(a)
+
+#base case with linear trend
+fm<-ihs(value)~log(population)+log(gdp)+tradec+reso+log(dist)+log(gdp_po)+bits+invcost+lit+as.numeric(year)
+b <- lm(fm, data)
+summary(b)
+
+#base case with quadratic trend
+fm<-ihs(value)~log(population)+log(gdp)+tradec+reso+log(dist)+log(gdp_po)+bits+invcost+lit+as.numeric(year)+I(as.numeric(year)^2)
+c <- lm(fm, data)
+summary(c)
+
+AIC(a) #1978.291
+AIC(b) #1911.743
+AIC(c) #1909.136
+
+
+#Choose quadratic trend model
+fm<-ihs(value)~log(population)+log(gdp)+tradec+reso+log(dist)+log(gdp_po)+bits+invcost+lit+as.numeric(year)+I(as.numeric(year)^2)
+
+
+#Locally robust panel Lagrange Multiplier tests for spatial dependence
+#Should we use spatial lag or spatial error model or both?
+#Assumption: pooling assumption, i.e. they do not allow for any kind of individual effect
+
+#Test for spatial error
+slmtest(fm, data ,listw=W.list.inv, test="lme")
+#Result: LM = 0.91269, df = 1, p-value = 0.3394 -> no spatial error dependence
+
+#Test for spatial lag
+slmtest(fm,data ,listw=W.list.inv, test="lml")
+#Result: LM = 0.028041, df = 1, p-value = 0.867 -> no spatial lag dependence
+
+#Test for spatial lag given that we have spatial error dependence
+slmtest(fm, data, listw=W.list.inv, test="rlme")
+#Result: LM = 7.4779, df = 1, p-value = 0.006246 -> spatial error and spatial lag dependence
+
+#Test for spatial error given that we have spatial lag dependence
+slmtest(fm, data, listw=W.list.inv, test="rlml")
+#Result: LM = 6.5932, df = 1, p-value = 0.01024 -> spatial error and spatial lag dependence
+#CONCLUSION: Spatial Lag & Error or none
+
+
+#Use sphtest to perform a spatial Hausmann test: fixed effects?
+#Cannot use ML due to Singularity problems
+sphtest(x=fm, data, listw=W.list.inv, spatial.model="sarar", method="GM")
+#Result: chisq = 32.738, df = 10, p-value = 0.0003014 -> Combined model is inconsistent - keep fixed effects model
+
+
+#"bsktest"
+bsktest(x=fm, data, listw=W.list.inv, test="LMH") # p-value = 1.516e-10 -> Random Regional Effects and Spatial autocorrelation
+bsktest(x=fm, data, listw=W.list.inv, test="LM1") # p-value = 9.308e-11 -> Random effects
+bsktest(x=fm, data, listw=W.list.inv, test="LM2") # p-value = 0.3394 -> No spatial autocorrelation
+bsktest(x=fm, data, listw=W.list.inv, test="CLMmu") # p-value = 5.467e-11 -> Random regional effects
+bsktest(x=fm, data, listw=W.list.inv, test="CLMlambda") # p-value = 0.2243 -> No spatial error correlation
+#CONCLUSION: Random regional effects
+
+
+#"bsjktest" - Is there serial correlation on top?
+bsjktest(x=fm, data, listw=W.list.inv, test="J") # p-value = 1.252e-09 -> random effects or serial corr. or spatial dependence in error terms
+bsjktest(x=fm, data, listw=W.list.inv, test="C.1") # p-value = 0.1821 -> no spatial dependence in error terms, sub RE and serial corr.
+bsjktest(x=fm, data, listw=W.list.inv, test="C.2") # p-value = 0.222 -> no serial corr. in error terms, sub RE and spatial dependence
+bsjktest(x=fm, data, listw=W.list.inv, test="C.3") # p-value = 1 -> no random effects, sub serial corr. and spatial dependence in error terms
+
+
+#Conclusion: Random effects model
+mod1 <- plm(fm, data, model="random")
+summary(mod1)
+
+
+#Estimate with Base-Model
+
+fm<-ihs(value)~log(population)+log(gdp)+tradec+reso+log(dist)+log(gdp_po)+bits+invcost+lit
+
+mod2 <- spml(fm, data, listw=W.list.inv, model="random")
+summary(mod2)
+
+# λ : (lambda) : Spatial autoregressive parameter
+# σ² ("phi") : Random effects
+# ρ : (rho) : Spatial error component
+# ψ (psi) : Serial correlation
+mod3 <- spreml(fm, data, w=W.list.inv, laf=TRUE, errors="semsrre")
+summary(mod3)
+
+@
+
+
+
+
+<<Differencing>>=
 #-----------------------------------------------------Differencing all - new data set is data_exp_cty
 
 names(data)[names(data) %in% c("Government Stability","Socioeconomic Conditions","Investment Profile","Internal Conflict","External Conflict","Corruption","Military in Politics","Religious Tensions","Law and Order","Ethnic Tensions","Democratic Accountability","Bureaucracy Quality")] = c("Govers","Socio","Invest","InterC","ExterC","Corruption","MilitaryPo","Religious","LawandOrder","EthnicTensions","DemocraticAccountability","BureaucracyQuality")
@@ -82,10 +183,8 @@ head(data_exp_cou)
 
 
 #Robustness checks with w-matrices
-
-
-
 @
+
 
 Estimation & testing with data stacked by country without Lybia
 <<Estimation with data>>=
