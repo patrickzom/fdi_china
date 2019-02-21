@@ -39,15 +39,15 @@ ihs <- function(x) {
 <<Analysis without South Africa and Lybia>>=
 
 #base case
-fm<-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+invcost+lit
+fm<-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+log(invcost)+lit
 a <- lm(fm, data)
 
 #base case + trend
-fm<-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+invcost+lit+as.numeric(year)
+fm<-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+log(invcost)+lit+as.numeric(year)
 a1 <- lm(fm, data)
 
 #base case + trend²
-fm<-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+invcost+lit+as.numeric(year)+I(as.numeric(year)^2)
+fm<-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+log(invcost)+lit+as.numeric(year)+I(as.numeric(year)^2)
 a2 <- lm(fm, data)
 
 AIC(a)
