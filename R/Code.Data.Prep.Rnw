@@ -701,7 +701,7 @@ modelTd.try1 <- bms(timeDat_try, mcmc="enumerate",user.int=T)
 #lit, Socioeconomic Conditions, gdp, population, GDPGrowth
 modelCd.country <- bms(countryDat_try, burn=50000, iter=5000000, mcmc="bd",user.int=T)
 modelCd.country1 <- bms(countryDat_try, mcmc="enumerate",user.int=T)
-#population, inflation, gdp_po, GDPGrowth, Religious Tension, gdppc, lit, BudBal, tradex, reso
+#population, inflation, gdp_po, GDPGrowth, Religious Tension, gdppc, lit, BudBal, tradec, reso
 
 #Try all variables together
 modelALLCd <- bms(countryDat1[,c(1:7, 11:33)], iter=30000000, start.value=5, mcmc="bd",user.int=T)

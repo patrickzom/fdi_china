@@ -39,29 +39,59 @@ ihs <- function(x) {
 <<Analysis without South Africa and Lybia>>=
 
 
-#base case without trend
+#base case
 fm<-ihs(value)~log(population)+log(gdp)+tradec+reso+log(dist)+log(gdp_po)+bits+invcost+lit
 a <- lm(fm, data)
 summary(a)
 
-#base case with linear trend
-fm<-ihs(value)~log(population)+log(gdp)+tradec+reso+log(dist)+log(gdp_po)+bits+invcost+lit+as.numeric(year)
+#base case with years
+fm<-ihs(value)~log(population)+log(gdp)+tradec+reso+log(dist)+log(gdp_po)+bits+invcost+lit+year
 b <- lm(fm, data)
 summary(b)
 
-#base case with quadratic trend
-fm<-ihs(value)~log(population)+log(gdp)+tradec+reso+log(dist)+log(gdp_po)+bits+invcost+lit+as.numeric(year)+I(as.numeric(year)^2)
+#split case
+fm<-ihs(value)~log(population)+log(gdp)+tradec+reso+log(dist)+log(gdp_po)+bits+eco+fin+pol+lit
 c <- lm(fm, data)
 summary(c)
 
-AIC(a) #1978.291
-AIC(b) #1911.743
-AIC(c) #1909.136
+#split case with years
+fm<-ihs(value)~log(population)+log(gdp)+tradec+reso+log(dist)+log(gdp_po)+bits+eco+fin+pol+lit+year
+d <- lm(fm, data)
+summary(d)
 
+#reduced case with country
+fm<-ihs(value)~log(population)+log(gdp)+tradec+reso+log(gdp_po)+invcost+lit+iso2c
+e <- lm(fm, data)
+summary(e)
+
+#reduced case with country + year
+fm<-ihs(value)~log(population)+log(gdp)+tradec+reso+log(gdp_po)+invcost+lit+iso2c+year
+f <- lm(fm, data)
+summary(f)
+
+#reduced, split case with country
+fm<-ihs(value)~log(population)+log(gdp)+tradec+reso+log(gdp_po)+eco+fin+pol+lit+iso2c
+g <- lm(fm, data)
+summary(g)
+
+#reduced, split case with country, years
+fm<-ihs(value)~log(population)+log(gdp)+tradec+reso+log(gdp_po)+eco+fin+pol+lit+iso2c+year
+h <- lm(fm, data)
+summary(h)
+
+#base case
+AIC(a) #1879.058
+AIC(b) #1802.64 - winner
+AIC(c) #1850.245
+AIC(d) #1803.236
+#reduced case
+AIC(e) #1738.796
+AIC(f) #1739.511
+AIC(g) #1738.743 - winner
+AIC(h) #1742.563
 
 #Choose quadratic trend model
 fm<-ihs(value)~log(population)+log(gdp)+tradec+reso+log(dist)+log(gdp_po)+bits+invcost+lit+as.numeric(year)+I(as.numeric(year)^2)
-
 
 #Locally robust panel Lagrange Multiplier tests for spatial dependence
 #Should we use spatial lag or spatial error model or both?
@@ -114,7 +144,52 @@ summary(mod1)
 
 #Estimate with Base-Model
 
-fm<-ihs(value)~log(population)+log(gdp)+tradec+reso+log(dist)+log(gdp_po)+bits+invcost+lit
+fm<-ihs(value)~log(population)+log(gdp)+tradec+reso+log(dist)+log(gdp_po)+bits+invcost+lit+year
+
+#Locally robust panel Lagrange Multiplier tests for spatial dependence
+#Should we use spatial lag or spatial error model or both?
+#Assumption: pooling assumption, i.e. they do not allow for any kind of individual effect
+
+#Test for spatial error
+slmtest(fm, data ,listw=W.list.inv, test="lme")
+#Result: LM = 0.91269, df = 1, p-value = 2.468e-08 -> spatial error dependence
+
+#Test for spatial lag
+slmtest(fm,data ,listw=W.list.inv, test="lml")
+#Result: LM = 0.028041, df = 1, p-value = 1.232e-09 -> spatial lag dependence
+
+#Test for spatial lag given that we have spatial error dependence
+slmtest(fm, data, listw=W.list.inv, test="rlme")
+#Result: LM = 7.4779, df = 1, p-value = 0.7337 -> no spatial error and spatial lag dependence
+
+#Test for spatial error given that we have spatial lag dependence
+slmtest(fm, data, listw=W.list.inv, test="rlml")
+#Result: LM = 6.5932, df = 1, p-value = 0.01474 -> no spatial error and spatial lag dependence
+#CONCLUSION: Spatial Lag or Error
+
+
+#Use sphtest to perform a spatial Hausmann test: fixed effects?
+#Cannot use ML due to Singularity problems
+sphtest(x=fm, data, listw=W.list.inv, spatial.model="sarar", method="GM")
+#Result: chisq = 32.738, df = 10, p-value = 0.0003014 -> Combined model is inconsistent - keep fixed effects model
+
+
+#"bsktest"
+bsktest(x=fm, data, listw=W.list.inv, test="LMH") # p-value = 2.22e-16 -> Random Regional Effects and Spatial autocorrelation
+bsktest(x=fm, data, listw=W.list.inv, test="LM1") # p-value = 5.022e-10 -> Random effects
+bsktest(x=fm, data, listw=W.list.inv, test="LM2") # p-value = 2.468e-08 -> spatial autocorrelation
+bsktest(x=fm, data, listw=W.list.inv, test="CLMmu") # p-value = 6.02e-10 -> Random regional effects
+bsktest(x=fm, data, listw=W.list.inv, test="CLMlambda") # p-value = 0.01171 -> No spatial error correlation
+#CONCLUSION: Random regional effects 
+
+
+#"bsjktest" - Is there serial correlation on top?
+bsjktest(x=fm, data, listw=W.list.inv, test="J") # p-value = 2.2e-16 -> random effects or serial corr. or spatial dependence in error terms
+bsjktest(x=fm, data, listw=W.list.inv, test="C.1") # p-value = 0.005817 -> spatial dependence in error terms, sub RE and serial corr.
+bsjktest(x=fm, data, listw=W.list.inv, test="C.2") # p-value = 0.02189 -> serial corr. in error terms, sub RE and spatial dependence
+bsjktest(x=fm, data, listw=W.list.inv, test="C.3") # p-value = 1 -> no random effects, sub serial corr. and spatial dependence in error terms
+
+fm<-ihs(value)~log(population)+log(gdp)+tradec+reso+log(dist)+log(gdp_po)+bits+pol+eco+fin+lit
 
 mod2 <- spml(fm, data, listw=W.list.inv, model="random")
 summary(mod2)
@@ -123,11 +198,34 @@ summary(mod2)
 # σ² ("phi") : Random effects
 # ρ : (rho) : Spatial error component
 # ψ (psi) : Serial correlation
-mod3 <- spreml(fm, data, w=W.list.inv, laf=TRUE, errors="semsrre")
+mod3 <- spreml(fm, data, w=W.list.inv, lag=TRUE, errors="semsrre")
 summary(mod3)
 
 @
 
+
+<<>>=
+names(data)[names(data) %in% c("Government Stability","Socioeconomic Conditions","Investment Profile","Internal Conflict","External Conflict","Corruption","Military in Politics","Religious Tensions","Law and Order","Ethnic Tensions","Democratic Accountability","Bureaucracy Quality")] = c("Govers","Socio","Invest","InterC","ExterC","Corruption","MilitaryPo","Religious","LawandOrder","EthnicTensions","DemocraticAccountability","BureaucracyQuality")
+
+fm <- ihs(value)~log(population)+log(gdp)+tradec+reso+log(dist)+log(gdp_po)+bits+Govers+Socio+Invest+InterC+ExterC+Corruption+MilitaryPo+Religious+LawandOrder+EthnicTensions+DemocraticAccountability+BureaucracyQuality+CAXGS+DebtServ+ForDebt+IntLiq+XRStab+BudBal+CACC+GDPGrowth+GDPGrowth+GDPHead+Inflation
+
+a1 <- lm(fm, data)
+summary(a1)
+AIC(a1)
+
+
+fm1 <- ihs(value)~log(population)+log(gdp)+tradec+reso+log(dist)+log(gdp_po)+bits+Govers+Socio+Invest+InterC+ExterC+Corruption+MilitaryPo+Religious+LawandOrder+EthnicTensions+DemocraticAccountability+BureaucracyQuality+CAXGS+DebtServ+ForDebt+IntLiq+XRStab+BudBal+CACC+GDPGrowth+GDPGrowth+GDPHead+Inflation
+
+a1 <- lm(fm1, data)
+summary(a1)
+AIC(a1)
+
+fm2 <- ihs(value)~log(population)+log(gdp)+log(dist)+Invest+ExterC+LawandOrder+DemocraticAccountability+DebtServ+ForDebt+CACC+GDPGrowth+GDPGrowth
+a2 <- lm(fm2, data)
+summary(a2)
+AIC(a2)
+
+@
 
 
 
