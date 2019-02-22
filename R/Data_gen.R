@@ -11,12 +11,6 @@ library(mice)
 library(splm)
 
 
-
-setwd("C:/WU/Master/Spatial/Projekt")
-getwd()
-
-
-
 ##-----------------------------------------------functions
 
 
