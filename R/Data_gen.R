@@ -397,6 +397,8 @@ data_exp<-data_exp[order(data_exp$year,match(data_exp$iso2c,rownames(W.dis))),]
 data_exp<-data_exp[order(match(data_exp$iso2c,x), data_exp$year),]
 
 
+
+
 #saveRDS(data_exp, "FDI_data_large.rds")
 #saveRDS(W.list.inv, "W.list.inv.rds")
 #saveRDS(W.dis, "W.dis.rds")
