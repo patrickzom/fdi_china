@@ -59,6 +59,10 @@ POL <- POL[POL$iso2c %in% x, ]
 POL<-POL[,-(3:21)]#keine NAs in pol
 
 
+
+A<-gather(POL,"year", "pol",3:15)
+A<-A%>%group_by(Country, iso2c, year)%>%summarise(pol=sum(pol))#calculate sum of all political risk variables
+
 ind<-gather(POL,"year", "pol",3:15)
 ind<-ind%>%group_by(Country, iso2c, year, .id)%>%summarise(pol=sum(pol))#calculate sum of all political risk variables
 
@@ -67,6 +71,9 @@ remove(pol)
 
 #start ordering
 ind<-filter(ind, iso2c!="LY")#to get Libya out
+A<-filter(A, iso2c!="LY")
+ind<-filter(ind, iso2c!="ZA")#to get South Africa out
+A<-filter(A, iso2c!="ZA")
 
 x<-levels(as.factor(ind$iso2c))
 shp <- shp[shp$CNTR_ID %in% x, ]
@@ -77,6 +84,7 @@ x<-as.character(x$CNTR_ID)
 ind<-ind %>% spread(.id, pol)
 
 ind<-ind[order(ind$year,match(ind$iso2c,x)),]#for ordering ind in the same way as our weights matrix
+A<- A[order(A$year,match(A$iso2c,x)),]#for ordering A in the same way as our weights matrix
 
 sum(1:442==which(ind$iso2c==x))
 
@@ -93,6 +101,8 @@ FIN <- FIN[FIN$iso2c %in% x, ]
 
 FIN<-FIN[,-(3:21)]#keine NAs in Fin
 
+B<-gather(FIN,"year", "fin",3:15)
+B<-B%>%group_by(Country, year)%>%summarise(fin=sum(fin))
 
 fin<-gather(FIN,"year", "fin",3:15)
 fin<-fin%>%group_by(Country, year, .id)%>%summarise(fin=sum(fin))
@@ -100,6 +110,7 @@ fin<-fin%>%group_by(Country, year, .id)%>%summarise(fin=sum(fin))
 fin<-fin %>% spread(.id, fin)
 
 ind<-left_join(ind,fin, by=c("Country", "year"))#keine NAs
+indices <- left_join(A,B, by=c("Country", "year"))
 
 remove(FIN)
 remove(fin)
@@ -116,6 +127,8 @@ ECO <- ECO[ECO$iso2c %in% x, ]
 
 ECO<-ECO[,-(3:21)]#keine NAS
 
+C<-gather(ECO,"year", "eco",3:15)
+C<-C%>%group_by(Country, year)%>%summarise(eco=sum(eco))
 
 eco<-gather(ECO,"year", "eco",3:15)
 eco<-eco%>%group_by(Country, year, .id)%>%summarise(eco=sum(eco))
@@ -123,11 +136,12 @@ eco<-eco%>%group_by(Country, year, .id)%>%summarise(eco=sum(eco))
 eco<-eco %>% spread(.id, eco)
 
 ind<-left_join(ind,eco, by=c("Country", "year"))#keine NAs
+indices <- left_join(indices,C, by=c("Country", "year"))
 
 anyNA(ind)
 remove(ECO)
 remove(eco)
-
+remove(A,B,C)
 
 ###-------------------------------------------WDI DATA----------------------------------------------------
 ###------------------------------------------------------------------------------------------------------
@@ -352,7 +366,8 @@ litt<-as.data.frame(litt)
 
 data_exp<-subset(data_exp,select=-c(lit))
 
-litt$year<-as.numeric(rep.int(2003:2015,34))# auch ändern wenn Lybien raus
+litt$year<-as.numeric(rep.int(2003:2015,33))# auch ändern wenn Lybien raus
+
 data_exp<-left_join(data_exp, litt, by=c("iso2c", "year"))
 
 #geht wsl nur mit matrix
@@ -390,15 +405,22 @@ anyNA(data_exp)
 names(data_exp)[names(data_exp) %in% c("A-Government Stability","B-Socioeconomic Conditions","C-Investment Profile","D-Internal Conflict","E-External Conflict","F-Corruption","G-Military in Politics","H-Religious Tensions","I-Law and Order","J-Ethnic Tensions","K-Democratic Accountability","L-Bureaucracy Quality")] = c("Government Stability","Socioeconomic Conditions","Investment Profile","Internal Conflict","External Conflict","Corruption","Military in Politics","Religious Tensions","Law and Order","Ethnic Tensions","Democratic Accountability","Bureaucracy Quality")
 
 
+indices <- subset(indices, select=-Country)
+indices$year <- as.numeric(indices$year)
+
+data_full <- data_exp %>% left_join(indices, by=c("iso2c","year")) %>% rename.vars(from="GDP_po", to="gdp_po") %>% mutate(invcost=1/(pol+fin+eco))
+
+remove(ind,indices, litt, zaza, data2)
 
 #------------------------------------------------------Save Data-------------------------------------------------------------
 
 data_exp<-data_exp[order(data_exp$year,match(data_exp$iso2c,rownames(W.dis))),]
 data_exp<-data_exp[order(match(data_exp$iso2c,x), data_exp$year),]
 
+data_full<-data_full[order(data_full$year,match(data_full$iso2c,rownames(W.dis))),]
+data_full<-data_full[order(match(data_full$iso2c,x), data_full$year),]
 
-
-
+#saveRDS(data_full, "./data/data_full.RData")
 #saveRDS(data_exp, "FDI_data_large.rds")
 #saveRDS(W.list.inv, "W.list.inv.rds")
 #saveRDS(W.dis, "W.dis.rds")

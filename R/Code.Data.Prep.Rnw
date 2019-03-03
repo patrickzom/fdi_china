@@ -554,15 +554,18 @@ data_full <- data_exp %>% left_join(indices, by=c("iso2c","year")) %>% mutate(gd
 @
 
 
-<<BMS>>=
+
+
+<<BMS new>>=
 library(BMS)
-#data <- readRDS("./data/data_full.RData")
+library(stargazer)
+
+data <- readRDS("./data/data_full.RData")#big file with fin, eco, pol
+data_new <- readRDS("./data/FDI_data_large.rds")#neu
 
 #data_exp is stacked by country
 #W.list.inv<-readRDS("./data/W.list.inv.rds")
 #W.dis<-readRDS("./data/W.dis.rds")
-
-data_year<-data[order(data$year,match(data$iso2c,rownames(W.dis))),] #stacked by year
 
 #Necessary functions
 panel_unstack = function(stackeddata, tstep=NULL) {
@@ -601,7 +604,32 @@ demean = function(x, margin) {
   sweep(x,otherdims,apply(x,otherdims,mean))
 }
 
+#reduce data set and change columns - removes bits, dist, iso2c, year,
+data_new <- data[,c(33, 3:6, 8, 10:32)]
+data_new <- data_new[,c(33, 3:6, 32, 10:31)]#neu
 
+#Use the functions 
+array <- panel_unstack(data_new, tstep=13)
+time <- panel_stack(demean(array,3))
+country <- panel_stack(demean(array,1))
+
+#BMS - country fixed effects
+modelCountry <- bms(country, burn=2000000, iter=3000000, start.value=10, mcmc="bd",user.int=T)
+modelCountry1 <- bms(country, nmodel=0, mcmc="enumerate",user.int=T)
+#GDPHead, reso, GDPGrowth, population, ForDebt, IntLiq, Government Stability
+
+#BMS - time fixed effects
+modelTime <- bms(time, burn=2000000, iter=3000000, start.value=10, mcmc="bd",user.int=T)
+modelTime1 <- bms(time, start.value=5, mcmc="enumerate",user.int=T)
+#gdp, IntLiq, GDPHead, Socioeconomic Conditions, Government Stability, CACC, lit
+
+
+
+
+@
+
+
+<<BMS old>>=
 #reduce data set and change columns - removes bits, dist, iso2c, year, gdppc_po
 data_test <- data[,c(34, 3:6, 8, 33, 39, 35:38, 11:32)]
 
@@ -718,31 +746,6 @@ modelTd=bms(timeDat[,1:23], burn=1000, mcmc="enumerate")
 coef(modelCd)
 
 plot(modelCd)
-
-
- 
-AO <- data_test[1:(13*3),]
-bms5 <- bms(AO, mcmc="enumerate")
-
-
-#Singularity Problem
-SVD <- svd(countryDat)
-variance.explained = prop.table(SVD$d^2) 
-countrySVD <- SVD$u[,1:2] %*% diag(SVD$d[1:2]) %*% t(SVD$v[,1:2]) #Does not work.
-
-#Next try
-rankifremoved <- sapply(1:ncol(timeDat), function (x) qr(timeDat[,-x])$rank)
-which(rankifremoved == max(rankifremoved))
-
-
-bms5 <- bms(countrySVD, mcmc="enumerate", start.value=5)
-
-bms10 <- bms(timeDat, mcmc="enumerate", start.value=10)
-
-
-
-
 @
-
 
 \end{document}

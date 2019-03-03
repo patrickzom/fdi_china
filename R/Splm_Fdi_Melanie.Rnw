@@ -19,7 +19,9 @@ library(splm)
 library(ggplot2)
 library(reshape2)
 library(gdata)
+library(stargazer)
 
+data_new <- readRDS("./data/FDI_data_large.rds")
 data <- readRDS("./data/data_full.RData")
 data_exp<-readRDS("./data/FDI_data_large.rds")
 W.list.inv<-readRDS("./data/W.list.inv.rds")
@@ -54,6 +56,10 @@ AIC(a)
 AIC(a1)
 AIC(a2)
 summary(a2)
+
+stargazer(a2, title="Regression Results")
+
+
 
 #base case
 fm<-ihs(value)~log(population)+log(gdp)+tradec+reso+log(dist)+log(gdp_po)+bits+invcost+lit
