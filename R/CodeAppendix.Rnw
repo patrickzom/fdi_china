@@ -5,15 +5,19 @@
 
 <<General, echo=FALSE, eval=TRUE>>=
 library(BMS)
+library(splm)
+library(plm)
 library(stargazer)
 
 data <- readRDS("./data/data_full.RData")
+W.list.inv <- readRDS(".data/W.list.inv.rds")
+W.dis <- readRDS(".data/W.dis.rds")
 
 @
 
 
-
-<<Base Model, echo=TRUE, eval=TRUE>>=
+We first have a look at the base model with the composite index.
+<<Base Model with composite index echo=TRUE, eval=FALSE>>=
 
 #base case
 fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+log(invcost)+lit
@@ -27,11 +31,190 @@ a1 <- lm(fm, data)
 fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+log(invcost)+lit+as.numeric(year)+I(as.numeric(year)^2)
 a2 <- lm(fm, data)
 
-stargazer(a, a1, a2, type="latex", title="Base Model", style="all" ,keep.stat=c("adj.rsq","rsq","aic"))
+#result: base case + trend²
+random.composite <- spml(fm, data, listw=W.list.inv, model="random", lag=FALSE, spatial.error="none")
+summary(random.composite)
+-2*random.composite$logLik+2*length(data)
+@
+Following the regular approach, i.e. simple OLS-estimation, we would choose a the model with the squared-trend in it. If we ran the spatial tests on the chosen model we wouldn't find any evidence for spatial models.
+
+But let us take a closer look at the base model without trend. If we wun the below test we find that there are spatial inderdependencies.
+<<Testing Base Model with composite index, echo=TRUE, eval=FALSE>>=
+
+fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+log(invcost)+lit
+
+#Locally robust panel Lagrange Multiplier tests for spatial dependence
+#Question: Should we use spatial lag or spatial error model or both?
+#Assumption: pooling assumption, i.e. they do not allow for any kind of individual effect
+
+#Test for spatial error
+slmtest(fm, data, listw=W.list.inv, test="lme")
+#Result: LM = 29.721, df = 1, p-value = 4.989e-08 -> spatial error dependence
+
+#Test for spatial lag
+slmtest(fm, data, listw=W.list.inv, test="lml")
+#Result: LM = 37.883, df = 1, p-value = 7.511e-10 -> spatial lag dependence
+
+#Error nested in lag?
+slmtest(fm, data, listw=W.list.inv, test="rlme")
+#Result: LM = 1.2992, df = 1, p-value = 0.2544 -> no error nested in lag
+
+#Lag allowing for spatial error?
+slmtest(fm, data, listw=W.list.inv, test="rlml")
+#Result: LM = 9.4613, df = 1, p-value = 0.002099 -> lag nested in error
+
+#CONCLUSION: No Spatial Lag nor Spatial Error
+
+#Hausmanntest cannot be conducted due to singularity issue
+
+#"bsktest"
+bsktest(x=fm, data, listw=W.list.inv, test="LMH") 
+#Result: p-value = 3.331e-16 -> Random Regional Effects and Spatial autocorrelation
+
+bsktest(x=fm, data, listw=W.list.inv, test="LM1") 
+#Result: p-value = 4.256e-10 -> Random effects
+
+bsktest(x=fm, data, listw=W.list.inv, test="LM2") 
+#Result: p-value = 4.989e-08 -> Spatial error correlation
+
+bsktest(x=fm, data, listw=W.list.inv, test="CLMmu") 
+#Result: p-value = 4.843e-12 -> Random regional effects
+
+bsktest(x=fm, data, listw=W.list.inv, test="CLMlambda") 
+#Result: p-value = 0.01148 -> Spatial error correlation given RE
+
+#CONCLUSION: Random regional effects
+
+
+#"bsjktest" - Is there serial correlation on top?
+
+bsjktest(x=fm, data, listw=W.list.inv, test="C.1") 
+#Result: p-value = 0.001022 -> spatial dependence in error terms, sub RE and serial corr.
+
+bsjktest(x=fm, data, listw=W.list.inv, test="C.2") 
+#Result: p-value = 0.007308 -> (no) serial corr. in error terms, sub RE and spatial dependence
+
+bsjktest(x=fm, data, listw=W.list.inv, test="C.3") 
+#Result: p-value = 1 -> weird
+
+#CONCLUSION: SPML with lag and erroer or SPREML with small serial correlation
 @
 
-\section{Bayesian Model Selection}
+Given the above results we are not completely sure which model we should choose. Therefore we run both possible models and check which has the lower AIC.
+<<Estimation Base Model with composite index, echo=TRUE, eval=FALSE>>=
+fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+log(invcost)+lit
+spml.composite <- spml(fm, data, listw=W.list.inv, model="random", lag=TRUE, spatial.error="b")
+summary(spml.composite)
 
+spreml.composite <- spreml(fm, data, w=W.list.inv, model="random", lag=TRUE, spatial.error="sem2")
+summary(spreml.composite)
+
+-2*spml.composite$logLik+2*length(data)
+-2*spreml.composite$logLik+2*length(data)
+
+#CONCLUSION: SPREML (lag, error, RE, SC)
+@
+We can conclude that our model shall include random effects, spatial lags, spatial errors and serial correlation.
+
+In the lines above we carry out the same analysis as above but with the sub-indices.
+<<Base Model with sub-indices, echo=TRUE, eval=FALSE>>=
+
+#base case
+fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+lit+fin+eco+pol
+a <- lm(fm, data)
+
+fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+lit+log(fin)+log(eco)+log(pol)
+b <- lm(fm, data)
+#result: indices not in log
+
+#base case + trend
+fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+lit+fin+eco+pol+as.numeric(year)
+a1 <- lm(fm, data)
+
+#base case + trend²
+fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+lit+fin+eco+pol+as.numeric(year)+I(as.numeric(year)^2)
+a2 <- lm(fm, data)
+
+#result: base case + trend²
+random.indices <- spml(fm, data, listw=W.list.inv, model="random", lag=FALSE, spatial.error="none")
+summary(random.indices)
+-2*random.indices$logLik+2*length(data)
+@
+
+Again, it can be observed that there are spatial interdependencies if we do not include a trend. 
+<<Testing Base Model with sub-indices, echo=TRUE, eval=FALSE>>=
+
+fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+lit+fin+eco+pol
+
+#Locally robust panel Lagrange Multiplier tests for spatial dependence
+#Question: Should we use spatial lag or spatial error model or both?
+#Assumption: pooling assumption, i.e. they do not allow for any kind of individual effect
+
+#Test for spatial error
+slmtest(fm, data, listw=W.list.inv, test="lme")
+#Result: LM = 5.9356, df = 1, p-value = 0.01484 -> no spatial error dependence
+
+#Test for spatial lag
+slmtest(fm, data,listw=W.list.inv, test="lml")
+#Result: LM = 15.141, df = 1, p-value = 9.977e-05 -> Spatial lag dependence
+
+#CONCLUSION: Spatial Lag
+
+#Hausmanntest cannot be conducted due to singularity issue
+
+#"bsktest"
+bsktest(x=fm, data, listw=W.list.inv, test="LMH") 
+#Result: p-value = 1.023e-08 -> Random Regional Effects and Spatial autocorrelation
+
+bsktest(x=fm, data, listw=W.list.inv, test="LM1") 
+#Result: p-value = 9.101e-08 -> Random effects
+
+bsktest(x=fm, data, listw=W.list.inv, test="LM2") 
+#Result: p-value = 0.01484 -> no spatial error correlation
+
+#CONCLUSION: Random effects
+
+
+#"bsjktest" - Is there serial correlation on top?
+bsjktest(x=fm, data, listw=W.list.inv, test="C.1") 
+#Result: p-value = 0.00353 -> spatial dependence in error terms, sub RE and serial corr.
+bsjktest(x=fm, data, listw=W.list.inv, test="C.2") 
+#Result: p-value = 0.0064 -> serial corr. in error terms, sub RE and spatial dependence
+bsjktest(x=fm, data, listw=W.list.inv, test="C.3") 
+#Result: p-value = 1 -> weird
+
+#Check models: 
+spml.indices <- spml(fm, data, listw=W.list.inv, model="random", lag=TRUE, spatial.error="b")
+summary(spml.indices)
+
+spreml.indices <- spreml(fm, data, w=W.list.inv, model="random", lag=TRUE, spatial.error="semsrre")
+summary(spreml.indices)
+
+-2*spml.indices$logLik+2*length(data)
+-2*spreml.indices$logLik+2*length(data)
+
+#CONCLUSION: SPREML (lag, error, RE, SC)
+
+@
+
+Now, we ask the question: Which model is better, the Base Model with the composite index or the Base Model with sub-indices?
+<<Comparison, echo=TRUE, eval=FALSE>>=
+fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+log(invcost)+lit+as.numeric(year)+I(as.numeric(year)^2)
+spreml.composite <- spreml(fm, data, w=W.list.inv, model="random", lag=TRUE, spatial.error="sem2")
+
+fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+lit+fin+eco+pol+as.numeric(year)+I(as.numeric(year)^2)
+spreml.indices <- spreml(fm, data, w=W.list.inv, model="random", lag=TRUE, spatial.error="semsrre")
+
+-2*spreml.composite$logLik+2*length(data)
+-2*spreml.indices$logLik+2*length(data)
+
+#CONCLUSION: Base Model with sub-indices
+@
+To conclude, the base model with sub-indices is a better choice. In the next section we would like to check whether certain components of the indices will be a better choice.
+
+
+
+\section{Bayesian Model Selection}
 
 <<Preparation, echo=TRUE, eval=TRUE>>=
 
@@ -91,7 +274,6 @@ country <- panel_stack(demean(array,1))
 
 @
 
-
 <<BMS-Results, echo=TRUE, eval=TRUE>>=
 
 #BMS - country fixed effects
@@ -102,26 +284,28 @@ saveRDS(modelCountry, "./data/modelCountry")
 modelTime <- bms(time, burn=20000000, iter=30000000, start.value=5, mcmc="bd",user.int=T)
 saveRDS(modelTime, "./data/modelTime")
 @
-For the country fixed effects model we would include the following variables:
+For the country fixed effects model we would include the following variables (because they are above 10\% or 5\% threshold):
 \begin{itemize}
 \item Population
 \item Inflation
 \item Surrounding-market potential
-\item GDP Growth (from the economic risk indicator)
-\item Religious Tensions (from the political risk indicator)
+\item Real GDP Growth
+\item Religious Tensions
+\item Foreign Debt as a Percentage of GDP (5\% threshold)
+\item Budget Balance as a Percentage of GDP (5\% threshold)
+\item Natural Resources (5\% threshold)
 \end{itemize}
 
-For the time fixed effects model we would include the following variables:
+For the time fixed effects model we would include the following variables (because they are above 10\% and 5\% threshold):
 \begin{itemize}
 \item Literacy Rate
-\item Socioeconomic Conditions (from the political risk indicator)
+\item Socioeconomic Conditions
 \item GDP
 \item Population
-\item GDP Growth (from the economic risk indicator)
+\item Real GDP Growth
 \end{itemize}
 
-
-For the robustness check we vary the sampling algorithm. Instead of the default birth/death MCMC algorithm we use the reversible jump algorithm which adds a "swap" step to the birth/death algorithm. Thereafter we draw once from every model.
+For the robustness check we vary the sampling algorithm. Instead of the default birth/death MCMC algorithm we use the reversible jump algorithm which adds a "swap" step to the birth/death algorithm. Thereafter we draw once from every model. In addition to that we check whether already the unique draw from all the models give us some indications on the final results.
 <<Robustness Checks I, echo=TRUE, eval=FALSE>>=
 
 modelCountryEnum <- bms(country, mcmc="enumerate",user.int=T) #population, inflation, gdp_po, GDPGrowth, Religious
@@ -137,12 +321,64 @@ modelTime1 <- bms(time, burn=20000000, iter=30000000, start.value=5, mcmc="rev.j
 saveRDS(modelTime1, "./data/modelTime1")
 
 @
-We clearly see that the results do not depend on the algorithm, which is clearly a good sign.
+We clearly see that the results do not depend on the algorithm, which is clearly a good sign. 
+
+
+We delete all variables with PIP lower than 1\% and draw again. This shows us how sensitive the results are regarding the data set.
+<<Robustness Checks II, echo=TRUE, eval=FALSE>>=
+
+#Country fixed effects
+data_new1 <- data_new[,c(1:7, 9:15, 18:19, 21:26, 28:29)]
+array1 <- panel_unstack(data_new1, tstep=13)
+country1 <- panel_stack(demean(array1,1))
+
+modelC <- bms(country1, burn=20000000, iter=30000000, start.value=5, mcmc="bd",user.int=T) #population, inflation, gdp_po, GDPGrowth, Religious, ForDebt
+saveRDS(modelC, "./data/modelC")
+
+
+#Time fixed effects
+data_new2 <- data_new[,c(1:9, 11:12, 14:29)]
+array2 <- panel_unstack(data_new2, tstep=13)
+time1 <- panel_stack(demean(array2,3))
+
+modelT <- bms(time1, burn=20000000, iter=30000000, start.value=5, mcmc="bd",user.int=T) #lit, socio, gdp, gdpgrowth, population, 
+saveRDS(modelT, "./data/modelT")
+
+@
+For the country fixed effects model we would include the following variables (because they are above 10\% / 5\% threshold):
+\begin{itemize}
+\item Population
+\item Inflation
+\item Surrounding-market potential
+\item Real GDP Growth
+\item Religious Tensions
+\item Foreign Debt as a Percentage of GDP (5\% threshold)
+\item Budget Balance as a Percentage of GDP (5\% threshold)
+\item Natural Resources (5\% threshold)
+\end{itemize}
+
+For the time fixed effects model we would include the following variables (because they are above 10\% and 5\% threshold):
+\begin{itemize}
+\item Literacy Rate
+\item Socioeconomic Conditions
+\item GDP
+\item Population
+\item Real GDP Growth
+\item Investment Profile (5\% threshold)
+\end{itemize}
+
 
 \subsection{BMS - sub-sampling}
 
+In addition, we check how sensitive the algorithm is to the given data set. Therefore we conduct the following multiple-steps process:
+\begin{enumerate}
+    \item Firstly, we create three sub-samples where we include all variables from one sub-index plus the two remaining full sub-indices, e.g. all variables from the economic risk index plus the variable 'financial risk and 'political risk'. Once we have obtained the results from three million draws of the MC3 sampler, after a burn-in phase of two million iterations we exclude the least likely variables, i.e. variables with PIP below 2\% and below 3\%, from the big sample. 
+    \item With this reduction we are able to decrease the model space and sample several times out of the most likely models. 
+\end{enumerate}
+In general, the results should not vary tremendeously between the initial sampling and the reduced data set sampling as only the least likely variables have been excluded from the sample.\\
+
 We now proceed to the robustness checks with the sub-samples. For the political risk indicators we keep the 20 million burn-ins and 30 million iterations, for the other two indicators we can reduce them because the model space is significant smaller and thus we don't need that many draws for the other two sub-samples.
-<<Robustness Checks II, echo=TRUE, eval=FALSE>>=
+<<Robustness Checks III, echo=TRUE, eval=FALSE>>=
 data_test <- data[,c(33, 3:6, 8, 32, 10:31, 34:36)] #reduce data set and change columns - removes bits, dist, iso2c, year
 
 
@@ -224,86 +460,9 @@ saveRDS(modelCd6, "./data/modelCd6")
 #remove everything below 3%: GDPHead
 #remove everything below 5%: GDPHead, CACC
 
-
-@
-For the time fixed effects model we remove the following variables (because below 3\%):
-\begin{itemize}
-\item Government Stability (political risk component)
-\item Internal Conflict (political risk component)
-\item External Conflict (political risk component)
-\item Corruption (political risk component)
-\item Military in Politics (political risk component)
-\item Religious Tensions (political risk component)
-\item Bureaucracy Quality (political risk component)
-\item Foreign Debt Service as a Percentage of Exports of Goods and Services (financial risk component)
-\item Current Account as a Percentage of Exports of Goods and Services (financial risk component)
-\item Exchange Rate Stability (financial risk component)
-\end{itemize}
-
-For the country fixed effects model we remove the following variables (because below 3\%:
-\begin{itemize}
-\item Socioeconomic Conditions (political risk component)
-\item Investment Profile (political risk component)
-\item Internal Conflict (political risk component)
-\item External Conflict (political risk component)
-\item Military in Politics (political risk component)
-\item Ethnic Tensions (political risk component)
-\item Democratic Accountability (political risk component)
-\item Bureaucracy Quality (political risk component)
-\item GDP per Head (economic risk component)
-\item Foreign Debt Service as a Percentage of Exports of Goods and Services (financial risk component) 
-\item Current Account as a Percentage of Exports of Goods and Services (financial risk component) 
-\item Net International Liquidity as Months of Import Cover (financial risk component)
-\end{itemize}
-
-<<Robustness Checks III, echo=TRUE, eval=TRUE>>=
-data_test <- data[,c(33, 3:6, 8, 32, 10:31, 34:36)] #reduce data set and change columns - removes bits, dist, iso2c, year
-
-#Time fixed effects
-#remove all below 2%: Internal, Military, Government, External, Bureaucracy, Corruption, Religious, CAXGS, DebtServ, XStab
-data_test_time <- data_test[,c(1:7, 9:10, 16:18, 22:23, 25:29)]
-
-modelTime2 <- bms(data_test_time, burn=20000000, iter=30000000, start.value=5, mcmc="bd",user.int=T)
-saveRDS(modelTime2, "./data/modelTime2")
-modelTime3 <- bms(data_test_time, burn=20000000, iter=30000000, start.value=5, mcmc="rev.jump",user.int=T)
-saveRDS(modelTime3, "./data/modelTime3")
-
-
-#Country fixed effects
-#remove all below 3%: Democratic, Socioeconomic, Investment, Ethnic, Military, External, Internal, Bureaucracy, DebtServ, CAXGS, IntLiq, GDPHead
-data_test_country <- data_test[,c(1:8, 13, 15:16, 22, 24:27, 29)]
-
-modelCountry2 <- bms(data_test_country, burn=20000000, iter=30000000, start.value=5, mcmc="bd",user.int=T)
-saveRDS(modelCountry2, "./data/modelCountry2")
-modelCountry3 <- bms(data_test_country, burn=20000000, iter=30000000, start.value=5, mcmc="rev.jump",user.int=T)
-saveRDS(modelCountry3, "./data/modelCountry3")
 @
 
-Given the above analysis we would include the following variables for the time fixed effects model:
-\begin{itemize}
-\item Literacy Rate
-\item GDP
-\item Socioeconomic Conditions (from the political risk indicator)
-\item GDP Growth (from the economic risk indicator)
-\item Investment Profile (from the political risk indicator)
-\item ForDebt (from the financial risk indicator)
-\item CACC (from the economic risk indicator)
-\item Population
-\end{itemize}
-
-Given the above analysis we would include the following variables for the country fixed effects model:
-\begin{itemize}
-\item Literacy Rate
-\item Governmental Stability (from the political risk indicator)
-\item Population
-\item Natural Resources
-\item GDP Growth (from the economic risk indicator)
-\item GDP
-\item Law and Order (from the political risk indicator)
-\end{itemize}
-
-
-<<Robustness Checks IV, echo=TRUE, eval=TRUE>>=
+<<Robustness Checks IV, echo=TRUE, eval=FALSE>>=
 data_test <- data[,c(33, 3:6, 8, 32, 10:31, 34:36)] #reduce data set and change columns - removes bits, dist, iso2c, year
 
 #Time fixed effects
@@ -325,162 +484,107 @@ saveRDS(modelCountry4, "./data/modelCountry4")
 modelCountry5 <- bms(data_test_country, burn=20000000, iter=30000000, start.value=5, mcmc="rev.jump",user.int=T)
 saveRDS(modelCountry5, "./data/modelCountry5")
 @
-Given the above analysis we would include the following variables for the time fixed effects model:
-\begin{itemize}
-\item Literacy Rate
-\item GDP
-\item Socioeconomic Conditions (from the political risk indicator)
-\item GDP Growth (from the economic risk indicator)
-\item Investment Profile (from the political risk indicator)
-\item ForDebt (from the financial risk indicator)
-\item DebtServ (from the financial risk indicator)
-\item CACC (from the economic risk indicator)
-\end{itemize}
 
-Given the above analysis we would include the following variables for the country fixed effects model:
-\begin{itemize}
-\item Literacy Rate
-\item Governmental Stability (from the political risk indicator)
-\item Population
-\item GDP
-\item GDP Growth (from the economic risk indicator)
-\item Natural Resources
-\item Bureaucracy Quality (from the political risk indicator)
-\end{itemize}
+<<Robustness Checks V, echo=FALSE, eval=FALSE>>=
+data_test <- data[,c(33, 3:6, 8, 32, 10:31, 34:36)] #reduce data set and change columns - removes bits, dist, iso2c, year
+
+#Time fixed effects
+#remove all below 3%: Internal, Military, Government, External, Bureaucracy, Corruption, Religious, CAXGS, DebtServ, XStab
+data_test_time <- data_test[,c(1:7, 9:10, 16:18, 22:23, 25:29)]
+
+modelTime2 <- bms(data_test_time, burn=20000000, iter=30000000, start.value=5, mcmc="bd",user.int=T)
+saveRDS(modelTime2, "./data/modelTime2")
+modelTime3 <- bms(data_test_time, burn=20000000, iter=30000000, start.value=5, mcmc="rev.jump",user.int=T)
+saveRDS(modelTime3, "./data/modelTime3")
 
 
+#Country fixed effects
+#remove all below 3%: Democratic, Socioeconomic, Investment, Ethnic, Military, External, Internal, Bureaucracy, DebtServ, CAXGS, IntLiq, GDPHead
+data_test_country <- data_test[,c(1:8, 13, 15:16, 22, 24:27, 29)]
+
+modelCountry2 <- bms(data_test_country, burn=20000000, iter=30000000, start.value=5, mcmc="bd",user.int=T)
+saveRDS(modelCountry2, "./data/modelCountry2")
+modelCountry3 <- bms(data_test_country, burn=20000000, iter=30000000, start.value=5, mcmc="rev.jump",user.int=T)
+saveRDS(modelCountry3, "./data/modelCountry3")
+@
+To conclude the results did not change tramendously but to some extend.
 
 
-
-In addition to the robustness checks above we carried out the following:
-\begin{itemize}
-\item Changed the order of the variables.
-\item Started the MCMC algorithm with the remaining variables from the base model.
-\item Started the MCMC algorithm with 0-10 covariates.
-\item Used different algorithms.
-\end{itemize}
-
-To conclude the results did not change tramendously but to some extend depending on the variable set. However, the starting model and the choosen MCMC algorithm did not have an effect on the results. 
+<<>>=
+tryit2 <- bms(country, burn=20000000, iter=30000000, start.value=25, mcmc="bd",user.int=T)
+@
 
 
-Therefore we conclude that the results from the first draw are robust and we proceed with our analysis using the results given above.
-
-
+For the country fixed effects model we yield the following:
 <<Country Fixed Effects, echo=TRUE, eval=TRUE>>=
-fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+data$`Religious Tensions`+Inflation+GDPGrowth+fin
+fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+data$`Religious Tensions`+Inflation+GDPGrowth
 b <- lm(fm, data)
 
-fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+ihs(data$`Religious Tensions`)+ihs(Inflation)+ihs(GDPGrowth)+log(fin)
+fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+ihs(data$`Religious Tensions`)+ihs(Inflation)+ihs(GDPGrowth)
 b1 <- lm(fm, data)
 
-fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+data$`Religious Tensions`+Inflation+GDPGrowth+data$`Government Stability`+data$`Law and Order`+fin
+fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+data$`Religious Tensions`+Inflation+GDPGrowth+ForDebt+BudBal
 b2 <- lm(fm, data)
 
-fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+ihs(data$`Religious Tensions`)+ihs(Inflation)+ihs(GDPGrowth)+log(data$`Government Stability`)+log(data$`Law and Order`)+log(fin)
+fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+ihs(data$`Religious Tensions`)+ihs(Inflation)+ihs(GDPGrowth)+ihs(ForDebt)+log(BudBal)
 b3 <- lm(fm, data)
-
-fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+GDPGrowth+data$`Government Stability`+data$`Law and Order`+fin
-b4 <- lm(fm, data)
-
-fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+ihs(GDPGrowth)+log(data$`Government Stability`)+log(data$`Law and Order`)+log(fin)
-b5 <- lm(fm, data)
-
-fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+ihs(GDPGrowth)+log(data$`Government Stability`)+ihs(data$`Bureaucracy Quality`)+log(fin)
-b6 <- lm(fm, data)
-
-fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+data$`Religious Tensions`+Inflation+GDPGrowth+data$`Government Stability`+data$`Law and Order`+data$`Bureaucracy Quality`+fin
-b7 <- lm(fm, data)
 
 AIC(b)
 AIC(b1)
 AIC(b2)
 AIC(b3)
-AIC(b4)
-AIC(b5)
-AIC(b6)
 summary(b2)
 
-stargazer(b, b4, b2, type="latex", title="Base Model", style="aer")
+country.fixed <- plm(fm, data, effect="individual")
+summary(country.fixed)
+
 @
 
-For the country fixed effects model we would include the following variables:
-\begin{itemize}
-\item Population
-\item Inflation (from the economic risk indicator)
-\item Surrounding-market potential
-\item GDP Growth (from the economic risk indicator)
-\item Religious Tensions (from the political risk indicator)
-\end{itemize}
 
-For the time fixed effects model we would include the following variables:
-\begin{itemize}
-\item Literacy Rate
-\item Socioeconomic Conditions (from the political risk indicator)
-\item GDP
-\item Population
-\item GDP Growth (from the economic risk indicator)
-\end{itemize}
-
+For the fime fixed effects model we yield the following:
 <<Time Fixed Effects, echo=TRUE, eval=TRUE>>=
-fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+data$`Socioeconomic Conditions`+Inflation+GDPGrowth
+fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+data$`Socioeconomic Conditions`+GDPGrowth
 c <- lm(fm, data)
 
-fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+ihs(data$`Religious Tensions`)+ihs(Inflation)+ihs(GDPGrowth)+log(fin)
+fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+log(data$`Socioeconomic Conditions`)+ihs(GDPGrowth)
 c1 <- lm(fm, data)
 
-fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+data$`Religious Tensions`+Inflation+GDPGrowth+data$`Government Stability`+data$`Law and Order`+fin
+fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+data$`Socioeconomic Conditions`+GDPGrowth+data$`Investment Profile`
 c2 <- lm(fm, data)
 
-fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+ihs(data$`Religious Tensions`)+ihs(Inflation)+ihs(GDPGrowth)+log(data$`Government Stability`)+log(data$`Law and Order`)+log(fin)
+fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+log(data$`Socioeconomic Conditions`)+ihs(GDPGrowth)+log(data$`Investment Profile`)
 c3 <- lm(fm, data)
-
-fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+GDPGrowth+data$`Government Stability`+data$`Law and Order`+fin
-c4 <- lm(fm, data)
-
-fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+ihs(GDPGrowth)+log(data$`Government Stability`)+log(data$`Law and Order`)+log(fin)
-c5 <- lm(fm, data)
 
 AIC(c)
 AIC(c1)
 AIC(c2)
 AIC(c3)
-AIC(c4)
-AIC(c5)
-summary(b2)
+summary(c2)
 
+time.fixed <- plm(fm, data, effect="time")
+summary(time.fixed)
 
 @
 
 
 
-<<>>=
-##-------------------Fromula
-
-fm<-ihs(value)~lit+log(gdp)+`Socioeconomic Conditions`+`Investment Profile`+ForDebt+CACC+log(population)
+<<NICHT WICHTIG>>=
+fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+data$`Religious Tensions`+Inflation+GDPGrowth
 b <- lm(fm, data)
-
-
-
-
-#singular mit der gleichung, wenn ich population und gdppc raushau gehts
-#fm<-ihs(value)~Within(log(population))+Within(log(gdppc))+tradec+reso+log(dist)+log(GDP_po)+bits+pol+fin+eco+lit
-#fm<-ihs(value)~Within(log(population))+Within(log(gdppc))+Within(tradec)+Within(reso)+log(dist)+Within(log(GDP_po))+bits+Within(pol)+Within(fin)+Within(eco)+Within(lit)
-
-
 #Locally robust panel Lagrange Multiplier tests for spatial dependence
 #Should we use spatial lag or spatial error model or both?
 #Assumption: pooling assumption, i.e. they do not allow for any kind of individual effect
 
 #Test for spatial error
-slmtest(fm,data = data_exp_year ,listw=W.list.inv, test="lme")
+slmtest(fm,data = data ,listw=W.list.inv, test="lme")
 #Result: LM = 2.5249, df = 1, p-value = 0.1121 -> no spatial error dependence
 
 #Test for spatial lag
-slmtest(fm,data = data_exp_year ,listw=W.list.inv, test="lml")
+slmtest(fm,data = data ,listw=W.list.inv, test="lml")
 #Result: LM = 7.3923, df = 1, p-value = 0.006551 -> spatial lag dependence
 
 #Test for spatial error given that we have spatial lag dependence
-slmtest(fm, data=data_exp_year, listw=W.list.inv, test="rlml")
+slmtest(fm, data, listw=W.list.inv, test="rlme")
 #Result: LM = 14.757, df = 1, p-value = 0.0001223 -> spatial error and spatial lag dependence
 
 #CONCLUSION: Spatial Lag or Spatial Lag & Error
@@ -488,25 +592,25 @@ slmtest(fm, data=data_exp_year, listw=W.list.inv, test="rlml")
 
 #Use sphtest to perform a spatial Hausmann test: fixed effects?
 #Cannot use ML due to Singularity problems
-sphtest(x=fm, data=data_exp_year, listw=W.list.inv, spatial.model="sarar", method="GM")
+sphtest(x=fm, data, listw=W.list.inv, spatial.model="sarar", method="GM")
 #Result: chisq = 53.57, df = 10, p-value = 5.833e-08 -> Combined model is inconsistent - keep fixed effects model
 
 
 #"bsktest"
-bsktest(x=fm, data=data_exp_year, listw=W.list.inv, test="LMH") # p-value = 1.288e-14 -> Random Regional Effects and Spatial autocorrelation
-bsktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="LM1") # p-value = 1.555e-14 -> Random effects
-bsktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="LM2") # p-value = 0.1121 -> no spatial error correlation
-bsktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="CLMmu") # p-value < 2.2e-16 -> Random regional effects
-bsktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="CLMlambda") # p-value = 0.118 -> no spatial error correlation
+bsktest(x=fm, data, listw=W.list.inv, test="LMH") # p-value = 1.288e-14 -> Random Regional Effects and Spatial autocorrelation
+bsktest(x=fm, data ,listw=W.list.inv, test="LM1") # p-value = 1.555e-14 -> Random effects
+bsktest(x=fm, data ,listw=W.list.inv, test="LM2") # p-value = 0.1121 -> no spatial error correlation
+bsktest(x=fm, data ,listw=W.list.inv, test="CLMmu") # p-value < 2.2e-16 -> Random regional effects
+bsktest(x=fm, data ,listw=W.list.inv, test="CLMlambda") # p-value = 0.118 -> no spatial error correlation
 
 #CONCLUSION: Random effects but no spatial error correlation
 
 
 #"bsjktest" - Is there serial correlation on top?
-bsjktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="J") # p-value < 2.2e-16 -> random effects or serial corr. or spatial dependence in error terms
-bsjktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="C.1") # p-value = 0.04902 -> spatial dependence in error terms, sub RE and serial corr.
-bsjktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="C.2") # p-value = 1.134e-06 -> serial corr. in error terms, sub RE and spatial dependence
-bsjktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="C.3") # p-value = 1 -> no random effects, sub serial corr. and spatial dependence in error terms
+bsjktest(x=fm, data ,listw=W.list.inv, test="J") # p-value < 2.2e-16 -> random effects or serial corr. or spatial dependence in error terms
+bsjktest(x=fm, data,listw=W.list.inv, test="C.1") # p-value = 0.04902 -> spatial dependence in error terms, sub RE and serial corr.
+bsjktest(x=fm, data ,listw=W.list.inv, test="C.2") # p-value = 1.134e-06 -> serial corr. in error terms, sub RE and spatial dependence
+bsjktest(x=fm, data,listw=W.list.inv, test="C.3") # p-value = 1 -> no random effects, sub serial corr. and spatial dependence in error terms
 
 #CONCLUSION: Spatial dependence in error terms and serial correlation but no random effects
 
@@ -521,16 +625,16 @@ bsjktest(x=fm, data = data_exp_year ,listw=W.list.inv, test="C.3") # p-value = 1
 # ψ (psi) : Serial correlation
 
 # Full model including random effects ("model"), lagged dependent ("lag=TRUE") and spatial error ("spatial.error")
-sararreb <- spml(fm, data = data_exp_year ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="b")
+sararreb <- spml(fm, data,listw=W.list.inv, model="random", lag=TRUE, spatial.error="kkp")
 summary(sararreb)
 #Spatial autoregressive parameter, Random effects parameter are significant
-sararrekkp <- spml(fm, data = data_exp_year ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="kkp")
+sararrekkp <- spml(fm, data ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="kkp")
 summary(sararrekkp)
 #Spatial autoregressive parameter, Random effects parameter and Spatial error component are significant
 sararreb$logLik < sararrekkp$logLik
 
 # Model including random effects ("model"), lagged dependent ("lag=TRUE")
-sarreb <- spml(fm, data = data_exp_year ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="none")
+sarreb <- spml(fm, data ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="none")
 summary(sarreb)
 #Spatial autoregressive parameter, Random effects parameter are significant
 sarrekkp <- spml(fm, data = data_exp_year ,listw=W.list.inv, model="random", lag=TRUE, spatial.error="none")
@@ -539,11 +643,11 @@ summary(sarrekkp)
 sarreb$logLik = sarrekkp$logLik
 
 # Full model including random effects ("model"), lagged dependent ("lag=TRUE") and spatial error ("spatial.error")
-sararre <- spreml(fm, data_exp_year ,w=W.list.inv, lag = TRUE, errors = "semsrre")
+sararre <- spreml(fm, data ,w=W.list.inv, lag = TRUE, errors = "semsrre")
 summary(sararre)
 #Serial correlation and spatial autroregressive parameter are significant
 
-sarsem<-spml(fm, data_exp, listw=W.list.inv, lag=TRUE, spatial.error="kkp", model="within", effect="twoways", method="eigen", quiet=TRUE, zero.policy=NULL, tol.solce=1e-10)
+sarsem<-spml(fm, data, listw=W.list.inv, lag=TRUE, spatial.error="kkp", model="within", effect="twoways", method="eigen", quiet=TRUE, zero.policy=NULL, tol.solce=1e-10)
 
 summary(sarsem)
 effects(sarsem)
