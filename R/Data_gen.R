@@ -9,6 +9,7 @@ library(countrycode)
 library(data.table)
 library(mice)
 library(splm)
+library(gdata)
 
 
 ##-----------------------------------------------functions
@@ -421,9 +422,9 @@ data_full<-data_full[order(data_full$year,match(data_full$iso2c,rownames(W.dis))
 data_full<-data_full[order(match(data_full$iso2c,x), data_full$year),]
 
 #saveRDS(data_full, "./data/data_full.RData")
-#saveRDS(data_exp, "FDI_data_large.rds")
-#saveRDS(W.list.inv, "W.list.inv.rds")
-#saveRDS(W.dis, "W.dis.rds")
+#saveRDS(data_exp, "./data/FDI_data_large.rds")
+#saveRDS(W.list.inv, "./data/W.list.inv.rds")
+#saveRDS(W.dis, "./data/W.dis.rds")
 
 
 
