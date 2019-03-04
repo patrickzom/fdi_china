@@ -13,211 +13,6 @@ data <- readRDS("./data/data_full.RData")
 W.list.inv <- readRDS(".data/W.list.inv.rds")
 W.dis <- readRDS(".data/W.dis.rds")
 
-@
-
-
-We first have a look at the base model with the composite index.
-<<Base Model with composite index echo=TRUE, eval=FALSE>>=
-
-#base case
-fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+log(invcost)+lit
-a <- lm(fm, data)
-
-#base case + trend
-fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+log(invcost)+lit+as.numeric(year)
-a1 <- lm(fm, data)
-
-#base case + trend²
-fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+log(invcost)+lit+as.numeric(year)+I(as.numeric(year)^2)
-a2 <- lm(fm, data)
-
-#result: base case + trend²
-random.composite <- spml(fm, data, listw=W.list.inv, model="random", lag=FALSE, spatial.error="none")
-summary(random.composite)
--2*random.composite$logLik+2*length(data)
-@
-Following the regular approach, i.e. simple OLS-estimation, we would choose a the model with the squared-trend in it. If we ran the spatial tests on the chosen model we wouldn't find any evidence for spatial models.
-
-But let us take a closer look at the base model without trend. If we wun the below test we find that there are spatial inderdependencies.
-<<Testing Base Model with composite index, echo=TRUE, eval=FALSE>>=
-
-fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+log(invcost)+lit
-
-#Locally robust panel Lagrange Multiplier tests for spatial dependence
-#Question: Should we use spatial lag or spatial error model or both?
-#Assumption: pooling assumption, i.e. they do not allow for any kind of individual effect
-
-#Test for spatial error
-slmtest(fm, data, listw=W.list.inv, test="lme")
-#Result: LM = 29.721, df = 1, p-value = 4.989e-08 -> spatial error dependence
-
-#Test for spatial lag
-slmtest(fm, data, listw=W.list.inv, test="lml")
-#Result: LM = 37.883, df = 1, p-value = 7.511e-10 -> spatial lag dependence
-
-#Error nested in lag?
-slmtest(fm, data, listw=W.list.inv, test="rlme")
-#Result: LM = 1.2992, df = 1, p-value = 0.2544 -> no error nested in lag
-
-#Lag allowing for spatial error?
-slmtest(fm, data, listw=W.list.inv, test="rlml")
-#Result: LM = 9.4613, df = 1, p-value = 0.002099 -> lag nested in error
-
-#CONCLUSION: No Spatial Lag nor Spatial Error
-
-#Hausmanntest cannot be conducted due to singularity issue
-
-#"bsktest"
-bsktest(x=fm, data, listw=W.list.inv, test="LMH") 
-#Result: p-value = 3.331e-16 -> Random Regional Effects and Spatial autocorrelation
-
-bsktest(x=fm, data, listw=W.list.inv, test="LM1") 
-#Result: p-value = 4.256e-10 -> Random effects
-
-bsktest(x=fm, data, listw=W.list.inv, test="LM2") 
-#Result: p-value = 4.989e-08 -> Spatial error correlation
-
-bsktest(x=fm, data, listw=W.list.inv, test="CLMmu") 
-#Result: p-value = 4.843e-12 -> Random regional effects
-
-bsktest(x=fm, data, listw=W.list.inv, test="CLMlambda") 
-#Result: p-value = 0.01148 -> Spatial error correlation given RE
-
-#CONCLUSION: Random regional effects
-
-
-#"bsjktest" - Is there serial correlation on top?
-
-bsjktest(x=fm, data, listw=W.list.inv, test="C.1") 
-#Result: p-value = 0.001022 -> spatial dependence in error terms, sub RE and serial corr.
-
-bsjktest(x=fm, data, listw=W.list.inv, test="C.2") 
-#Result: p-value = 0.007308 -> (no) serial corr. in error terms, sub RE and spatial dependence
-
-bsjktest(x=fm, data, listw=W.list.inv, test="C.3") 
-#Result: p-value = 1 -> weird
-
-#CONCLUSION: SPML with lag and erroer or SPREML with small serial correlation
-@
-
-Given the above results we are not completely sure which model we should choose. Therefore we run both possible models and check which has the lower AIC.
-<<Estimation Base Model with composite index, echo=TRUE, eval=FALSE>>=
-fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+log(invcost)+lit
-spml.composite <- spml(fm, data, listw=W.list.inv, model="random", lag=TRUE, spatial.error="b")
-summary(spml.composite)
-
-spreml.composite <- spreml(fm, data, w=W.list.inv, model="random", lag=TRUE, spatial.error="sem2")
-summary(spreml.composite)
-
--2*spml.composite$logLik+2*length(data)
--2*spreml.composite$logLik+2*length(data)
-
-#CONCLUSION: SPREML (lag, error, RE, SC)
-@
-We can conclude that our model shall include random effects, spatial lags, spatial errors and serial correlation.
-
-In the lines above we carry out the same analysis as above but with the sub-indices.
-<<Base Model with sub-indices, echo=TRUE, eval=FALSE>>=
-
-#base case
-fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+lit+fin+eco+pol
-a <- lm(fm, data)
-
-fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+lit+log(fin)+log(eco)+log(pol)
-b <- lm(fm, data)
-#result: indices not in log
-
-#base case + trend
-fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+lit+fin+eco+pol+as.numeric(year)
-a1 <- lm(fm, data)
-
-#base case + trend²
-fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+lit+fin+eco+pol+as.numeric(year)+I(as.numeric(year)^2)
-a2 <- lm(fm, data)
-
-#result: base case + trend²
-random.indices <- spml(fm, data, listw=W.list.inv, model="random", lag=FALSE, spatial.error="none")
-summary(random.indices)
--2*random.indices$logLik+2*length(data)
-@
-
-Again, it can be observed that there are spatial interdependencies if we do not include a trend. 
-<<Testing Base Model with sub-indices, echo=TRUE, eval=FALSE>>=
-
-fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+lit+fin+eco+pol
-
-#Locally robust panel Lagrange Multiplier tests for spatial dependence
-#Question: Should we use spatial lag or spatial error model or both?
-#Assumption: pooling assumption, i.e. they do not allow for any kind of individual effect
-
-#Test for spatial error
-slmtest(fm, data, listw=W.list.inv, test="lme")
-#Result: LM = 5.9356, df = 1, p-value = 0.01484 -> no spatial error dependence
-
-#Test for spatial lag
-slmtest(fm, data,listw=W.list.inv, test="lml")
-#Result: LM = 15.141, df = 1, p-value = 9.977e-05 -> Spatial lag dependence
-
-#CONCLUSION: Spatial Lag
-
-#Hausmanntest cannot be conducted due to singularity issue
-
-#"bsktest"
-bsktest(x=fm, data, listw=W.list.inv, test="LMH") 
-#Result: p-value = 1.023e-08 -> Random Regional Effects and Spatial autocorrelation
-
-bsktest(x=fm, data, listw=W.list.inv, test="LM1") 
-#Result: p-value = 9.101e-08 -> Random effects
-
-bsktest(x=fm, data, listw=W.list.inv, test="LM2") 
-#Result: p-value = 0.01484 -> no spatial error correlation
-
-#CONCLUSION: Random effects
-
-
-#"bsjktest" - Is there serial correlation on top?
-bsjktest(x=fm, data, listw=W.list.inv, test="C.1") 
-#Result: p-value = 0.00353 -> spatial dependence in error terms, sub RE and serial corr.
-bsjktest(x=fm, data, listw=W.list.inv, test="C.2") 
-#Result: p-value = 0.0064 -> serial corr. in error terms, sub RE and spatial dependence
-bsjktest(x=fm, data, listw=W.list.inv, test="C.3") 
-#Result: p-value = 1 -> weird
-
-#Check models: 
-spml.indices <- spml(fm, data, listw=W.list.inv, model="random", lag=TRUE, spatial.error="b")
-summary(spml.indices)
-
-spreml.indices <- spreml(fm, data, w=W.list.inv, model="random", lag=TRUE, spatial.error="semsrre")
-summary(spreml.indices)
-
--2*spml.indices$logLik+2*length(data)
--2*spreml.indices$logLik+2*length(data)
-
-#CONCLUSION: SPREML (lag, error, RE, SC)
-
-@
-
-Now, we ask the question: Which model is better, the Base Model with the composite index or the Base Model with sub-indices?
-<<Comparison, echo=TRUE, eval=FALSE>>=
-fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+log(invcost)+lit+as.numeric(year)+I(as.numeric(year)^2)
-spreml.composite <- spreml(fm, data, w=W.list.inv, model="random", lag=TRUE, spatial.error="sem2")
-
-fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+lit+fin+eco+pol+as.numeric(year)+I(as.numeric(year)^2)
-spreml.indices <- spreml(fm, data, w=W.list.inv, model="random", lag=TRUE, spatial.error="semsrre")
-
--2*spreml.composite$logLik+2*length(data)
--2*spreml.indices$logLik+2*length(data)
-
-#CONCLUSION: Base Model with sub-indices
-@
-To conclude, the base model with sub-indices is a better choice. In the next section we would like to check whether certain components of the indices will be a better choice.
-
-
-
-\section{Bayesian Model Selection}
-
-<<Preparation, echo=TRUE, eval=TRUE>>=
-
 #----------------------------------------------------- Functions -----------------------------------------------------#
 ihs <- function(x) {
     y <- log(x + sqrt(x ^ 2 + 1))
@@ -262,6 +57,248 @@ demean = function(x, margin) {
   sweep(x,otherdims,apply(x,otherdims,mean))
 }
 
+
+@
+
+
+We first have a look at the base model with the composite index.
+<<Base Model with composite index echo=TRUE, eval=FALSE>>=
+#base case
+fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+log(invcost)+lit
+a <- spml(fm, data, listw=W.list.inv, model="random", lag=FALSE, spatial.error="none")
+a1 <- spml(fm, data, listw=W.list.inv, model="pooling", lag=FALSE, spatial.error="none")
+#RE or pooling or 
+-2*a$logLik+2*length(data) #1883.829
+-2*a1$logLik+2*length(data) #1931.992
+# Go for random effects
+
+#base case + trend
+fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+log(invcost)+lit+as.numeric(year)
+a1 <- spml(fm, data, listw=W.list.inv, model="random", lag=FALSE, spatial.error="none")
+
+#base case + trend²
+fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+log(invcost)+lit+as.numeric(year)+I(as.numeric(year)^2)
+a2 <- spml(fm, data, listw=W.list.inv, model="random", lag=FALSE, spatial.error="none")
+
+#with or without trend?
+-2*a$logLik+2*length(data) #1883.829
+-2*a1$logLik+2*length(data) #1825.606
+-2*a2$logLik+2*length(data) #1819.599
+#Go for base case + trend²
+
+#random.composite <- spml(fm, data, listw=W.list.inv, model="random", lag=FALSE, spatial.error="none")
+#summary(random.composite)
+#-2*random.composite$logLik+2*length(data)
+@
+Following the regular approach, i.e. simple OLS-estimation, we would choose a the model with the squared-trend in it. If we ran the spatial tests on the chosen model we wouldn't find any evidence for spatial models (we have done that before but it is not displayed here).
+
+But let us take a closer look at the base model without trend. If we wun the below test we find that there are spatial inderdependencies.
+<<Testing Base Model with composite index, echo=TRUE, eval=FALSE>>=
+fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+log(invcost)+lit
+
+#Locally robust panel Lagrange Multiplier tests for spatial dependence
+#Question: Should we use spatial lag or spatial error model or both?
+#Assumption: pooling assumption, i.e. they do not allow for any kind of individual effect
+
+#Test for spatial error
+slmtest(fm, data, listw=W.list.inv, test="lme")
+#Result: LM = 28.838, df = 1, p-value = 7.868e-08 -> spatial error dependence
+
+#Test for spatial lag
+slmtest(fm, data, listw=W.list.inv, test="lml")
+#Result: LM = 38.485, df = 1, p-value = 5.517e-10 -> spatial lag dependence
+
+#Error nested in lag?
+slmtest(fm, data, listw=W.list.inv, test="rlme")
+#Result: LM = 2.2086, df = 1, p-value = 0.1372 -> no error nested in lag
+
+#Lag allowing for spatial error?
+slmtest(fm, data, listw=W.list.inv, test="rlml")
+#Result: LM = 11.856, df = 1, p-value = 0.0005749 -> lag nested in error
+
+#CONCLUSION: Lag nested in error
+
+#Hausmanntest cannot be conducted due to singularity issue
+
+#"bsktest"
+bsktest(x=fm, data, listw=W.list.inv, test="LM1") 
+#Result: p-value = 6.52e-10 -> Random effects
+
+bsktest(x=fm, data, listw=W.list.inv, test="LM2") 
+#Result: p-value = 7.868e-08 -> Spatial error correlation
+
+bsktest(x=fm, data, listw=W.list.inv, test="CLMmu") 
+#Result: p-value = 7.366e-12 -> Random regional effects
+
+bsktest(x=fm, data, listw=W.list.inv, test="CLMlambda") 
+#Result: p-value = 0.01289 -> Spatial error correlation given RE
+
+#CONCLUSION: Random effects & Spatial Error
+
+
+#"bsjktest" - Is there serial correlation on top?
+
+bsjktest(x=fm, data, listw=W.list.inv, test="C.1") 
+#Result: p-value = 0.001146 -> spatial dependence in error terms, sub RE and serial corr.
+
+bsjktest(x=fm, data, listw=W.list.inv, test="C.2") 
+#Result: p-value = 0.00853 -> serial corr. in error terms, sub RE and spatial dependence
+
+bsjktest(x=fm, data, listw=W.list.inv, test="C.3") 
+#Result: p-value = 1 -> weird
+
+#CONCLUSION: SPREML with small serial correlation
+
+@
+
+Given the above results we are not completely sure which model we should choose. Therefore we run both possible models and check which has the lower AIC.
+<<Estimation Base Model with composite index, echo=TRUE, eval=FALSE>>=
+fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+log(invcost)+lit
+spml.composite <- spml(fm, data, listw=W.list.inv, model="random", lag=TRUE, spatial.error="b")
+summary(spml.composite)
+
+spreml.composite <- spreml(fm, data, w=W.list.inv, model="random", lag=TRUE, spatial.error="sem2")
+summary(spreml.composite)
+
+-2*spml.composite$logLik+2*length(data)
+-2*spreml.composite$logLik+2*length(data)
+
+#CONCLUSION: SPREML (lag, error, RE, SC)
+@
+We can conclude that our model shall include random effects, spatial lags, spatial errors and serial correlation.
+
+In the lines above we carry out the same analysis as above but with the sub-indices.
+<<Base Model with sub-indices, echo=TRUE, eval=FALSE>>=
+
+#base case
+fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+lit+fin+eco+pol
+b <- spml(fm, data, listw=W.list.inv, model="random", lag=FALSE, spatial.error="none")
+b1 <- spml(fm, data, listw=W.list.inv, model="pooling", lag=FALSE, spatial.error="none")
+#RE or pooling or 
+-2*b$logLik+2*length(data)
+-2*b1$logLik+2*length(data)
+# Go for random effects
+#Indices in log or not?
+fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+lit+log(fin)+log(eco)+log(pol)
+b1 <- spml(fm, data, listw=W.list.inv, model="random", lag=FALSE, spatial.error="none")
+-2*b$logLik+2*length(data)
+-2*b1$logLik+2*length(data)
+#Go for no-log
+
+#base case + trend
+fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+lit+fin+eco+pol+as.numeric(year)
+b1 <- spml(fm, data, listw=W.list.inv, model="random", lag=FALSE, spatial.error="none")
+
+#base case + trend²
+fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+lit+fin+eco+pol+as.numeric(year)+I(as.numeric(year)^2)
+b2 <- spml(fm, data, listw=W.list.inv, model="random", lag=FALSE, spatial.error="none")
+
+-2*b$logLik+2*length(data)
+-2*b1$logLik+2*length(data)
+-2*b2$logLik+2*length(data)
+#result: base case + trend²
+
+#random.indices <- spml(fm, data, listw=W.list.inv, model="random", lag=FALSE, spatial.error="none")
+#summary(random.indices)
+#-2*random.indices$logLik+2*length(data)
+@
+
+Again, it can be observed that there are spatial interdependencies if we do not include a trend. 
+<<Testing Base Model with sub-indices, echo=TRUE, eval=FALSE>>=
+fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+lit+fin+eco+pol
+
+#Locally robust panel Lagrange Multiplier tests for spatial dependence
+#Question: Should we use spatial lag or spatial error model or both?
+#Assumption: pooling assumption, i.e. they do not allow for any kind of individual effect
+
+#Test for spatial error
+slmtest(fm, data, listw=W.list.inv, test="lme")
+#Result: LM = 5.3427, df = 1, p-value = 0.02081 -> no spatial error dependence
+
+#Test for spatial lag
+slmtest(fm, data,listw=W.list.inv, test="lml")
+#Result: LM = 15.747, df = 1, p-value = 7.24e-05 -> Spatial lag dependence
+
+#Error nested in lag?
+slmtest(fm, data, listw=W.list.inv, test="rlme")
+#Result: LM = 10.683, df = 1, p-value = 0.001081 -> error nested in lag
+
+#Lag allowing for spatial error?
+slmtest(fm, data, listw=W.list.inv, test="rlml")
+#Result: LM = 21.087, df = 1, p-value = 4.388e-06 -> lag nested in error
+
+#CONCLUSION: Spatial Lag
+
+#Hausmanntest cannot be conducted due to singularity issue
+
+#"bsktest"
+bsktest(x=fm, data, listw=W.list.inv, test="LM1") 
+#Result: p-value = 1.226e-07 -> Random effects
+
+bsktest(x=fm, data, listw=W.list.inv, test="LM2") 
+#Result: p-value = 0.02081 -> Spatial error correlation
+
+bsktest(x=fm, data, listw=W.list.inv, test="CLMmu") 
+#Result: p-value = 3.85e-10 -> Random regional effects
+
+bsktest(x=fm, data, listw=W.list.inv, test="CLMlambda") 
+#Result: p-value = 0.01894 -> Spatial error correlation given RE
+
+#CONCLUSION: Random effects & Spatial error
+
+
+#"bsjktest" - Is there serial correlation on top?
+bsjktest(x=fm, data, listw=W.list.inv, test="C.1") 
+#Result: p-value = 0.005434 -> spatial dependence in error terms, sub RE and serial corr.
+bsjktest(x=fm, data, listw=W.list.inv, test="C.2") 
+#Result: p-value = 0.008132 -> serial corr. in error terms, sub RE and spatial dependence
+bsjktest(x=fm, data, listw=W.list.inv, test="C.3") 
+#Result: p-value = 1 -> weird
+
+#CONCLUSION: SPREML (lag, error, RE, SC)
+
+#Check models: 
+spreml.indices <- spreml(fm, data, w=W.list.inv, model="random", lag=TRUE, spatial.error="semsrre")
+summary(spreml.indices)
+-2*spreml.indices$logLik+2*length(data)
+
+@
+
+Now, we ask the question: Which model is better, the Base Model with the composite index or the Base Model with sub-indices?
+<<Comparison, echo=FALSE, eval=FALSE>>=
+fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+log(invcost)+lit+as.numeric(year)+I(as.numeric(year)^2)
+plm.composite <- plm(fm, data, model="random")
+random.composite <- spml(fm, data, listw=W.list.inv, model="random", lag=FALSE, spatial.error="none")
+
+fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+lit+fin+eco+pol+as.numeric(year)+I(as.numeric(year)^2)
+plm.indices <- plm(fm, data, model="random")
+random.indices <- spml(fm, data, listw=W.list.inv, model="random", lag=FALSE, spatial.error="none")
+
+fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+log(invcost)+lit
+spreml.composite <- spreml(fm, data, w=W.list.inv, model="random", lag=TRUE, spatial.error="semsrre")
+summary(spreml.composite)
+
+fm <-ihs(value)~log(population)+log(gdp)+log(tradec)+reso+log(dist)+log(gdp_po)+bits+lit+fin+eco+pol
+spreml.indices <- spreml(fm, data, w=W.list.inv, model="random", lag=TRUE, spatial.error="semsrre")
+summary(spreml.indices)
+
+-2*random.composite$logLik+2*length(data)
+-2*random.indices$logLik+2*length(data)
+-2*spreml.composite$logLik+2*length(data)
+-2*spreml.indices$logLik+2*length(data)
+
+stargazer(plm.composite, plm.indices, plm.composite, plm.indices, no.space=TRUE)
+
+#CONCLUSION: Base Model with sub-indices
+@
+To conclude, the base model with sub-indices is a better choice. In the next section we would like to check whether certain components of the indices will be a better choice.
+
+
+
+
+\section{Bayesian Model Selection}
+
+<<Preparation, echo=TRUE, eval=TRUE>>=
 
 #----------------------------------------------------- Data Preparation -----------------------------------------------------#
 
@@ -515,57 +552,46 @@ tryit2 <- bms(country, burn=20000000, iter=30000000, start.value=25, mcmc="bd",u
 @
 
 
-For the country fixed effects model we yield the following:
-<<Country Fixed Effects, echo=TRUE, eval=TRUE>>=
-fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+data$`Religious Tensions`+Inflation+GDPGrowth
-b <- lm(fm, data)
 
-fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+ihs(data$`Religious Tensions`)+ihs(Inflation)+ihs(GDPGrowth)
-b1 <- lm(fm, data)
-
+<<Country Fixed Effects, echo=FALSE, eval=FALSE>>=
+#For the country fixed effects model we yield the following:
+#log or without log?
 fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+data$`Religious Tensions`+Inflation+GDPGrowth+ForDebt+BudBal
-b2 <- lm(fm, data)
+b <- plm(fm, data, effect="individual")
 
 fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+ihs(data$`Religious Tensions`)+ihs(Inflation)+ihs(GDPGrowth)+ihs(ForDebt)+log(BudBal)
-b3 <- lm(fm, data)
+b1 <- plm(fm, data, effect="individual")
 
-AIC(b)
-AIC(b1)
-AIC(b2)
-AIC(b3)
-summary(b2)
-
-country.fixed <- plm(fm, data, effect="individual")
-summary(country.fixed)
-
+ifelse(r.squared(b, dfcor=TRUE) > r.squared(b1, dfcor=TRUE), "without log", "with log")
+#Result: With log
+#Unfortunately the pml-packages doesn't come with the AIC and log-likelifood function. Therefore we used the adjustd R-Squared instead.
 @
 
 
-For the fime fixed effects model we yield the following:
-<<Time Fixed Effects, echo=TRUE, eval=TRUE>>=
-fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+data$`Socioeconomic Conditions`+GDPGrowth
-c <- lm(fm, data)
 
-fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+log(data$`Socioeconomic Conditions`)+ihs(GDPGrowth)
-c1 <- lm(fm, data)
-
+<<Time Fixed Effects, echo=FALSE, eval=FALSE>>=
+#For the fime fixed effects model we yield the following:
+#log or without log?
 fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+data$`Socioeconomic Conditions`+GDPGrowth+data$`Investment Profile`
-c2 <- lm(fm, data)
+c <- plm(fm, data, effect="time")
 
 fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+log(data$`Socioeconomic Conditions`)+ihs(GDPGrowth)+log(data$`Investment Profile`)
-c3 <- lm(fm, data)
+c1 <- plm(fm, data, effect="time")
 
-AIC(c)
-AIC(c1)
-AIC(c2)
-AIC(c3)
-summary(c2)
-
-time.fixed <- plm(fm, data, effect="time")
-summary(time.fixed)
-
+ifelse(r.squared(c, dfcor=TRUE) > r.squared(c1, dfcor=TRUE), "without log", "with log")
+#Result: Without log
 @
 
+
+<<Comparison BMS-Models, echo=TRUE, eval=TRUE>>=
+fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+data$`Religious Tensions`+Inflation+GDPGrowth+ForDebt+BudBal
+country.fixed <- plm(fm, data, effect="individual")
+
+fm <- ihs(value) ~ log(population)+log(gdp)+log(tradec)+log(dist)+log(gdp_po)+reso+bits+lit+data$`Socioeconomic Conditions`+GDPGrowth+data$`Investment Profile`
+time.fixed <- plm(fm, data, effect="time")
+
+stargazer(country.fixed, time.fixed, no.space=TRUE, title="Country and Time Fixed Effects Model after BMS", dep.var.caption="", column.labels=c("Country Fixed Effects", "Time Fixed Effects"))
+@
 
 
 <<NICHT WICHTIG>>=
