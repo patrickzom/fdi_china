@@ -1,0 +1,253 @@
+\documentclass{article}
+
+\usepackage{geometry}
+\setlength{\parindent}{0pt}
+\geometry{textwidth=15cm}
+
+\usepackage{dcolumn}
+\usepackage{apacite}
+\usepackage{amsmath}
+\usepackage{xcolor}
+\usepackage{float}
+
+\title{Appendix II}
+
+\usepackage{Sweave}
+\begin{document}
+\input{CodeAppendix-concordance}
+\maketitle
+\hrulefill
+\vspace{0.5cm}
+
+First we would like to show some functions which we will be using later.
+\begin{Schunk}
+\begin{Sinput}
+> ihs <- function(x) {
++     y <- log(x + sqrt(x^2 + 1))
++     return(y)
++ }
+> panel_unstack = function(stackeddata, tstep = NULL) {
++     bigT = nrow(stackeddata)
++     K = ncol(stackeddata)
++     if (is.null(tstep)) 
++         tstep = bigT
++     X1 = aperm(array(as.vector(t(as.matrix(stackeddata))), dim = c(K, 
++         tstep, bigT/tstep)), perm = c(2, 1, 3))
++     try(dimnames(X1)[[1]] <- unique(sapply(strsplit(rownames(stackeddata), 
++         "_"), function(x) x[[2]])), silent = TRUE)
++     try(dimnames(X1)[[2]] <- colnames(stackeddata), silent = TRUE)
++     try(dimnames(X1)[[3]] <- unique(sapply(strsplit(rownames(stackeddata), 
++         "_"), function(x) x[[1]])), silent = TRUE)
++     return(X1)
++ }
+> panel_stack = function(array3d) {
++     x1 = apply(array3d, 2, rbind)
++     try(rownames(x1) <- as.vector(sapply(dimnames(array3d)[[3]], 
++         FUN = function(x) paste(x, dimnames(array3d)[[1]], sep = "_"))), 
++         silent = TRUE)
++     return(as.data.frame(x1))
++ }
+> demean = function(x, margin) {
++     if (!is.array(x)) 
++         stop("x must be an array/matrix")
++     otherdims = (1:length(dim(x)))[-margin]
++     sweep(x, otherdims, apply(x, otherdims, mean))
++ }
+\end{Sinput}
+\end{Schunk}
+
+\section{Bayesian Model Selection}
+
+\begin{Schunk}
+\begin{Sinput}
+> data_new <- data[, c(33, 3:6, 8, 10:32)]
+> array <- panel_unstack(data_new, tstep = 13)
+> time <- panel_stack(demean(array, 3))
+> country <- panel_stack(demean(array, 1))
+\end{Sinput}
+\end{Schunk}
+
+\begin{Schunk}
+\begin{Sinput}
+> modelCountry <- bms(country, burn = 2e+07, iter = 3e+07, start.value = 5, 
++     mcmc = "bd", user.int = T)
+> saveRDS(modelCountry, "./data/modelCountry")
+> modelTime <- bms(time, burn = 2e+07, iter = 3e+07, start.value = 5, 
++     mcmc = "bd", user.int = T)
+> saveRDS(modelTime, "./data/modelTime")
+\end{Sinput}
+\end{Schunk}
+For the country fixed effects model we would include the following variables (because they are above 10\% or 5\% threshold):
+\begin{itemize}
+\item Population
+\item Inflation
+\item Surrounding-market potential
+\item Real GDP Growth
+\item Religious Tensions
+\item Foreign Debt as a Percentage of GDP (5\% threshold)
+\item Budget Balance as a Percentage of GDP (5\% threshold)
+\item Natural Resources (5\% threshold)
+\end{itemize}
+
+For the time fixed effects model we would include the following variables (because they are above 10\% and 5\% threshold):
+\begin{itemize}
+\item Literacy Rate
+\item Socioeconomic Conditions
+\item GDP
+\item Population
+\item Real GDP Growth
+\end{itemize}
+
+For the robustness check we vary the sampling algorithm. Instead of the default birth/death MCMC algorithm we use the reversible jump algorithm which adds a "swap" step to the birth/death algorithm. Thereafter we draw once from every model. In addition to that we check whether already the unique draw from all the models give us some indications on the final results.
+\begin{Schunk}
+\begin{Sinput}
+> modelCountryEnum <- bms(country, mcmc = "enumerate", user.int = T)
+> saveRDS(modelCountryEnum, "./data/modelCountryEnum")
+> modelTimeEnum <- bms(time, mcmc = "enumerate", user.int = T)
+> saveRDS(modelTimeEnum, "./data/modelTimeEnum")
+> modelCountry1 <- bms(country, burn = 2e+07, iter = 3e+07, start.value = 5, 
++     mcmc = "bd", user.int = T)
+> saveRDS(modelCountry1, "./data/modelCountry1")
+> modelTime1 <- bms(time, burn = 2e+07, iter = 3e+07, start.value = 5, 
++     mcmc = "rev.jump", user.int = T)
+> saveRDS(modelTime1, "./data/modelTime1")
+\end{Sinput}
+\end{Schunk}
+We clearly see that the results do not depend on the algorithm, which is clearly a good sign. 
+
+
+We delete all variables with PIP lower than 1\% and draw again. This shows us how sensitive the results are regarding the data set.
+\begin{Schunk}
+\begin{Sinput}
+> data_new1 <- data_new[, c(1:7, 9:15, 18:19, 21:26, 28:29)]
+> array1 <- panel_unstack(data_new1, tstep = 13)
+> country1 <- panel_stack(demean(array1, 1))
+> modelC <- bms(country1, burn = 2e+07, iter = 3e+07, start.value = 5, 
++     mcmc = "bd", user.int = T)
+> saveRDS(modelC, "./data/modelC")
+> data_new2 <- data_new[, c(1:9, 11:12, 14:29)]
+> array2 <- panel_unstack(data_new2, tstep = 13)
+> time1 <- panel_stack(demean(array2, 3))
+> modelT <- bms(time1, burn = 2e+07, iter = 3e+07, start.value = 5, 
++     mcmc = "bd", user.int = T)
+> saveRDS(modelT, "./data/modelT")
+\end{Sinput}
+\end{Schunk}
+For the country fixed effects model we would include the following variables (because they are above 10\% / 5\% threshold):
+\begin{itemize}
+\item Population
+\item Inflation
+\item Surrounding-market potential
+\item Real GDP Growth
+\item Religious Tensions
+\item Foreign Debt as a Percentage of GDP (5\% threshold)
+\item Budget Balance as a Percentage of GDP (5\% threshold)
+\item Natural Resources (5\% threshold)
+\end{itemize}
+
+For the time fixed effects model we would include the following variables (because they are above 10\% and 5\% threshold):
+\begin{itemize}
+\item Literacy Rate
+\item Socioeconomic Conditions
+\item GDP
+\item Population
+\item Real GDP Growth
+\item Investment Profile (5\% threshold)
+\end{itemize}
+
+
+\subsection{BMS - sub-sampling}
+
+In addition, we check how sensitive the algorithm is to the given data set. Therefore we conduct the following multiple-steps process:
+\begin{enumerate}
+    \item Firstly, we create three sub-samples where we include all variables from one sub-index plus the two remaining full sub-indices, e.g. all variables from the economic risk index plus the variable 'financial risk and 'political risk'. Once we have obtained the results from three million draws of the MC3 sampler, after a burn-in phase of two million iterations we exclude the least likely variables, i.e. variables with PIP below 2\% and below 3\%, from the big sample. 
+    \item With this reduction we are able to decrease the model space and sample several times out of the most likely models. 
+\end{enumerate}
+In general, the results should not vary tremendeously between the initial sampling and the reduced data set sampling as only the least likely variables have been excluded from the sample.\\
+
+We now proceed to the robustness checks with the sub-samples. For the political risk indicators we keep the 20 million burn-ins and 30 million iterations, for the other two indicators we can reduce them because the model space is significant smaller and thus we don't need that many draws for the other two sub-samples.
+\begin{Schunk}
+\begin{Sinput}
+> data_test <- data[, c(33, 3:6, 8, 32, 10:31, 34:36)]
+> data_test_pol <- data_test[, c(1:19, 31:32)]
+> dat.array_pol <- panel_unstack(data_test_pol, tstep = 13)
+> timeDat_pol <- panel_stack(demean(dat.array_pol, 3))
+> modelTd1 <- bms(timeDat_pol, burn = 2e+07, iter = 3e+07, mcmc = "bd", 
++     user.int = T)
+> saveRDS(modelTd1, "./data/modelTd1")
+> modelTd2 <- bms(timeDat_pol, burn = 2e+07, iter = 3e+07, mcmc = "rev.jump", 
++     user.int = T)
+> saveRDS(modelTd2, "./data/modelTd2")
+> countryDat_pol <- panel_stack(demean(dat.array_pol, 1))
+> modelCd1 <- bms(countryDat_pol, burn = 2e+07, iter = 3e+07, mcmc = "bd", 
++     user.int = T)
+> saveRDS(modelCd1, "./data/modelCd1")
+> modelCd2 <- bms(countryDat_pol, burn = 2e+07, iter = 3e+07, mcmc = "rev.jump", 
++     user.int = T)
+> saveRDS(modelCd2, "./data/modelCd2")
+> data_test_fin <- data_test[, c(1:7, 20:24, 30, 32)]
+> dat.array_fin <- panel_unstack(data_test_fin, tstep = 13)
+> timeDat_fin <- panel_stack(demean(dat.array_fin, 3))
+> modelTd3 <- bms(timeDat_fin, burn = 2e+06, iter = 3e+06, mcmc = "bd", 
++     user.int = T)
+> saveRDS(modelTd3, "./data/modelTd3")
+> modelTd4 <- bms(timeDat_fin, burn = 2e+06, iter = 3e+06, mcmc = "rev.jump", 
++     user.int = T)
+> saveRDS(modelTd4, "./data/modelTd4")
+> countryDat_fin <- panel_stack(demean(dat.array_fin, 1))
+> modelCd3 <- bms(countryDat_fin, burn = 2e+06, iter = 3e+06, mcmc = "bd", 
++     user.int = T)
+> saveRDS(modelCd3, "./data/modelCd3")
+> modelCd4 <- bms(countryDat_fin, burn = 2e+06, iter = 3e+06, mcmc = "rev.jump", 
++     user.int = T)
+> saveRDS(modelCd4, "./data/modelCd4")
+> data_test_eco <- data_test[, c(1:7, 25:31)]
+> dat.array_eco <- panel_unstack(data_test_eco, tstep = 13)
+> timeDat_eco <- panel_stack(demean(dat.array_eco, 3))
+> modelTd5 <- bms(timeDat_eco, burn = 2e+06, iter = 3e+06, mcmc = "bd", 
++     user.int = T)
+> saveRDS(modelTd5, "./data/modelTd5")
+> modelTd6 <- bms(timeDat_eco, burn = 2e+06, iter = 3e+06, mcmc = "rev.jump", 
++     user.int = T)
+> saveRDS(modelTd6, "./data/modelTd6")
+> countryDat_eco <- panel_stack(demean(dat.array_eco, 1))
+> modelCd5 <- bms(countryDat_eco, burn = 2e+06, iter = 3e+06, mcmc = "bd", 
++     user.int = T)
+> saveRDS(modelCd5, "./data/modelCd5")
+> modelCd6 <- bms(countryDat_eco, burn = 2e+06, iter = 3e+06, mcmc = "rev.jump", 
++     user.int = T)
+> saveRDS(modelCd6, "./data/modelCd6")
+\end{Sinput}
+\end{Schunk}
+
+\begin{Schunk}
+\begin{Sinput}
+> data_test <- data[, c(33, 3:6, 8, 32, 10:31, 34:36)]
+> data_test_time <- data_test[, c(1:7, 9:10, 16:18, 20:29)]
+> modelTime4 <- bms(data_test_time, burn = 2e+07, iter = 3e+07, 
++     start.value = 5, mcmc = "bd", user.int = T)
+> saveRDS(modelTime4, "./data/modelTime4")
+> modelTime5 <- bms(data_test_time, burn = 2e+07, iter = 3e+07, 
++     start.value = 5, mcmc = "rev.jump", user.int = T)
+> saveRDS(modelTime5, "./data/modelTime5")
+> data_test_country <- data_test[, c(1:8, 11:13, 15:16, 19:20, 
++     22:29)]
+> modelCountry4 <- bms(data_test_country, burn = 2e+07, iter = 3e+07, 
++     start.value = 5, mcmc = "bd", user.int = T)
+> saveRDS(modelCountry4, "./data/modelCountry4")
+> modelCountry5 <- bms(data_test_country, burn = 2e+07, iter = 3e+07, 
++     start.value = 5, mcmc = "rev.jump", user.int = T)
+> saveRDS(modelCountry5, "./data/modelCountry5")
+\end{Sinput}
+\end{Schunk}
+
+To conclude the results did not change tramendously but to some extend. 
+
+
+
+
+
+
+
+
+\end{document}

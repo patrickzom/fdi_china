@@ -330,20 +330,20 @@ AIC(base)
 
 
 #Test for spatial error (LM)
-slmtest(fm,data ,listw=W.list.inv, test="lme")
+slmtest(fm,data ,listw=W.list.k, test="lme")
 #LM = 0.11333, df = 1, p-value = 0.7364 -> no spatial error dependence
 
 #Test for spatial lag
-slmtest(fm,data ,listw=W.list.inv, test="lml")
+slmtest(fm,data ,listw=W.list.k, test="lml")
 #Result: M = 0.095551, df = 1, p-value = 0.7572 -> no spatial lag dependence
 
 #Use sphtest to perform a spatial Hausmann test: fixed effects?
 #Cannot use ML due to Singularity problems
-sphtest(x=fm, data, listw=W.list.inv, spatial.model="sarar", method="GM")
+sphtest(x=fm, data, listw=W.list.k spatial.model="sarar", method="GM")
 #Result: chisq = 53.57, df = 10, p-value = 5.833e-08 -> Combined model is inconsistent - keep fixed effects model
 
 #"bsktest"
-bsktest(x=fm, data, listw=W.list.inv, test="LMH") #p-value = 0.4334 -> No Random Regional Effects and Spatial autocorrelation
+bsktest(x=fm, data, listw=W.list.k, test="LMH") #p-value = 0.4334 -> No Random Regional Effects and Spatial autocorrelation
 
 #"bsjktest" - Is there serial correlation on top?
 bsjktest(x=fm, data ,listw=W.list.inv, test="J") # p-value < 2.2e-16 -> random effects or serial corr. or spatial dependence in error terms
